@@ -1,0 +1,31 @@
+name: ekinerja
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ekinerja_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ekinerja
+      MYSQL_USER: ekinerja
+      MYSQL_PASSWORD: ekinerja
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: ekinerja_phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "8088:80"
+    depends_on:
+      - mysql
+
+volumes:
+  mysql_data:

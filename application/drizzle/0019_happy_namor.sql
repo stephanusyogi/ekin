@@ -1,0 +1,1 @@
+ALTER TABLE `performance_indicators` ADD `objective_group` integer DEFAULT 1 NOT NULL;

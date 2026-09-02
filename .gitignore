@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+application/node_modules/
+
+# Build & compiled outputs
+dist/
+build/
+application/dist/
+application/build/
+application/.next/
+application/.vinext/
+application/.sites-runtime/
+
+# Uploads & local storage
+uploads/
+application/uploads/
+
+# Environment files & credentials
+.env
+.env*
+application/.env
+application/.env*
+
+# Archives & binaries
+*.zip
+*.tar.gz
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
