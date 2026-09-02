@@ -32,8 +32,11 @@ type TeamAttendance = {
   id: number;
   employeeEmail: string;
   workDate: string;
+  checkIn: string;
   checkOut: string | null;
   attendanceStatus: string;
+  lateMinutes: number;
+  replacementMinutes: number;
   workOutput: string;
 };
 type TeamRecap = {
@@ -947,9 +950,13 @@ export default function AttendanceCenter() {
               <table>
                 <thead>
                   <tr>
-                    <th>Tanggal</th>
                     <th>Pegawai</th>
+                    <th>Tanggal</th>
+                    <th>Jam Masuk</th>
                     <th>Jam Pulang</th>
+                    <th>Status</th>
+                    <th>Terlambat</th>
+                    <th>Pengganti</th>
                     <th>Catatan Absen Pulang</th>
                   </tr>
                 </thead>
@@ -961,8 +968,15 @@ export default function AttendanceCenter() {
                       );
                       return (
                         <tr key={r.id}>
-                          <td>{r.workDate}</td>
                           <td>{employee?.fullName || r.employeeEmail}</td>
+                          <td>{r.workDate}</td>
+                          <td>
+                            {new Date(r.checkIn).toLocaleTimeString("id-ID", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              timeZone: "Asia/Jakarta",
+                            })}
+                          </td>
                           <td>
                             {r.checkOut
                               ? new Date(r.checkOut).toLocaleTimeString(
@@ -975,13 +989,16 @@ export default function AttendanceCenter() {
                                 )
                               : "Belum absen pulang"}
                           </td>
+                          <td>{r.attendanceStatus}</td>
+                          <td>{r.lateMinutes} mnt</td>
+                          <td>{r.replacementMinutes} mnt</td>
                           <td>{r.workOutput || "—"}</td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={4}>Belum ada data pada periode ini.</td>
+                      <td colSpan={8}>Belum ada data pada periode ini.</td>
                     </tr>
                   )}
                 </tbody>
