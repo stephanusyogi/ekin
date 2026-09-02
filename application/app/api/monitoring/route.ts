@@ -14,14 +14,18 @@ export async function GET(request: Request) {
       .filter(row => row.directSupervisorId === employee?.id && row.email)
       .map(row => row.email!.toLowerCase()),
   );
+  const parsePics = (raw: any): string[] => {
+    if (Array.isArray(raw)) return raw;
+    try { return typeof raw === "string" ? JSON.parse(raw) : []; }
+    catch { return []; }
+  };
   const createdByDirectReport = (task: typeof tasks.$inferSelect) =>
     directEmails.has((task.createdBy || task.ownerEmail).toLowerCase());
   const assignedToDirectReport = (task: typeof tasks.$inferSelect) => {
-    try { return (JSON.parse(task.picEmails || "[]") as string[]).some(email => directEmails.has(email.toLowerCase())); }
-    catch { return directEmails.has(task.ownerEmail.toLowerCase()); }
+    return parsePics(task.picEmails).some(email => directEmails.has(email.toLowerCase()));
   };
   let scope = "Pribadi"; let allowedUnits: string[] = [];
-  let visible = allTasks.filter(t => t.ownerEmail === identity.email || JSON.parse(t.picEmails || "[]").includes(identity.email));
+  let visible = allTasks.filter(t => t.ownerEmail === identity.email || parsePics(t.picEmails).includes(identity.email));
   if (identity.role === "super_user" || identity.role === "super_admin" || identity.role === "admin" || employee?.position === "Sekretaris") { visible = allTasks; scope = "Seluruh lembaga"; }
   else if (hasSakipOperator(identity)) { visible = allTasks.filter(task => Boolean(task.sourcePerformanceAgreementId)); scope = "To-Do terkait RKT/PK seluruh lembaga"; }
   else if (employee?.position === "Ketua") { visible = allTasks; scope = "Ringkasan seluruh lembaga"; }

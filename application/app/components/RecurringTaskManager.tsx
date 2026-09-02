@@ -6,7 +6,7 @@ type ProgressUpdate={id:number;employeeEmail:string;progress:number;outputRealiz
 type Assignee={id:number;fullName:string;email:string;position:string;unit:string;isSelf:boolean};type OrgUnit={id:number;name:string;type:string};
 type PerformanceSource={agreementId:number;indicatorId:number;year:number;agreementTitle:string;agreementLevel:string;ownerName:string;ownerPosition:string;objective:string;indicator:string;target:string};
 const fresh=()=>({mode:"Sekali" as "Sekali"|"Berulang",title:"",unit:"",picEmails:[] as string[],priority:"Sedang",outputType:"Dokumen",sourcePerformanceAgreementId:null as number|null,sourcePerformanceIndicatorId:null as number|null,deadline:"",output:"",notes:"",frequency:"Bulanan",generationDay:1,dueOffsetDays:7,startDate:new Date().toISOString().slice(0,10),endDate:"",verifierEmail:""});
-const parsePics=(raw:string)=>{try{return JSON.parse(raw||"[]") as string[]}catch{return[]}};
+const parsePics=(raw:any)=>{if(Array.isArray(raw))return raw as string[];try{return typeof raw==="string"?JSON.parse(raw) as string[]:[]}catch{return[]}};
 const OUTPUT_CATEGORIES=[
  ["Dokumen","Surat, memo, berita acara, SOP, proposal"],
  ["Laporan","Laporan kegiatan, laporan keuangan, laporan progres"],

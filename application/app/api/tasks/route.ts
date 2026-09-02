@@ -8,7 +8,9 @@ import { allowedTaskPerformanceSources } from "../../lib/task-performance-source
 import { logSecurityEvent } from "../../lib/security";
 
 const picsOf = (task: typeof tasks.$inferSelect) => {
-  try { return JSON.parse(task.picEmails || "[]") as string[]; }
+  const raw = task.picEmails as any;
+  if (Array.isArray(raw)) return raw as string[];
+  try { return typeof raw === "string" ? JSON.parse(raw) as string[] : []; }
   catch { return []; }
 };
 
