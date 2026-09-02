@@ -170,7 +170,12 @@ export async function GET(request: Request) {
 
     return response;
   } catch (error) {
+    const cause = (error as { cause?: unknown })?.cause;
     console.error("Google Auth Callback Error:", error);
+    console.error("→ cause:", cause);
+    console.error("→ code:", (cause as { code?: string })?.code);
+    console.error("→ sqlMessage:", (cause as { sqlMessage?: string })?.sqlMessage);
+    console.error("→ message:", (cause as { message?: string })?.message);
     return NextResponse.redirect(`${appUrl}/?error=server_error`);
   }
 }
