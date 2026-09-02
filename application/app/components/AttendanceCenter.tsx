@@ -21,11 +21,31 @@ type Other = {
   purpose: string;
   notes: string;
 };
+type TeamEmployee = {
+  id: number;
+  fullName: string;
+  email: string;
+  position: string;
+  unit: string;
+};
+type TeamAttendance = {
+  id: number;
+  employeeEmail: string;
+  workDate: string;
+  checkOut: string | null;
+  attendanceStatus: string;
+  workOutput: string;
+};
+type TeamRecap = {
+  period: { from: string; to: string };
+  employees: TeamEmployee[];
+  records: TeamAttendance[];
+};
 export default function AttendanceCenter() {
   const [today, setToday] = useState<Today | null>(null);
   const [records, setRecords] = useState<Other[]>([]);
   const [recap, setRecap] = useState<any>(null);
-  const [teamRecap, setTeamRecap] = useState<any>(null);
+  const [teamRecap, setTeamRecap] = useState<TeamRecap | null>(null);
   const [pending, setPending] = useState<any[]>([]);
   const [role, setRole] = useState("user");
   const [tab, setTab] = useState<
@@ -662,7 +682,7 @@ export default function AttendanceCenter() {
                     <th>Status</th>
                     <th>Terlambat</th>
                     <th>Pengganti</th>
-                    <th>Output</th>
+                    <th>Catatan Absen Pulang</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -747,7 +767,7 @@ export default function AttendanceCenter() {
               <th>Status</th>
               <th>Terlambat</th>
               <th>Pengganti</th>
-              <th>Output Pekerjaan</th>
+              <th>Catatan Absen Pulang</th>
             </tr>
           </thead>
           <tbody>
@@ -885,9 +905,9 @@ export default function AttendanceCenter() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teamRecap?.employees?.map((e: any) => {
+                  {teamRecap?.employees?.map((e) => {
                     const rr = teamRecap.records.filter(
-                      (x: any) => x.employeeEmail === e.email,
+                      (x) => x.employeeEmail === e.email,
                     );
                     return (
                       <tr key={e.id}>
@@ -899,27 +919,71 @@ export default function AttendanceCenter() {
                         <td>
                           {
                             rr.filter(
-                              (x: any) => x.attendanceStatus === "on_time",
+                              (x) => x.attendanceStatus === "on_time",
                             ).length
                           }
                         </td>
                         <td>
                           {
-                            rr.filter((x: any) => x.attendanceStatus === "late")
+                            rr.filter((x) => x.attendanceStatus === "late")
                               .length
                           }
                         </td>
                         <td>
                           {
                             rr.filter(
-                              (x: any) => x.attendanceStatus === "absent_late",
+                              (x) => x.attendanceStatus === "absent_late",
                             ).length
                           }
                         </td>
-                        <td>{rr.filter((x: any) => !x.checkOut).length}</td>
+                        <td>{rr.filter((x) => !x.checkOut).length}</td>
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+            <div className="recap-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Pegawai</th>
+                    <th>Jam Pulang</th>
+                    <th>Catatan Absen Pulang</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamRecap?.records?.length ? (
+                    teamRecap.records.map((r) => {
+                      const employee = teamRecap.employees.find(
+                        (e) => e.email === r.employeeEmail,
+                      );
+                      return (
+                        <tr key={r.id}>
+                          <td>{r.workDate}</td>
+                          <td>{employee?.fullName || r.employeeEmail}</td>
+                          <td>
+                            {r.checkOut
+                              ? new Date(r.checkOut).toLocaleTimeString(
+                                  "id-ID",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    timeZone: "Asia/Jakarta",
+                                  },
+                                )
+                              : "Belum absen pulang"}
+                          </td>
+                          <td>{r.workOutput || "—"}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={4}>Belum ada data pada periode ini.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
