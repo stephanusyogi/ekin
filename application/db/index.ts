@@ -10,7 +10,10 @@ export function getDb() {
       process.env.DATABASE_URL ||
       "mysql://root:root@127.0.0.1:3307/ekinerja";
 
-    pool = mysql.createPool(connectionString);
+    pool = mysql.createPool({
+      uri: connectionString,
+      dateStrings: true,
+    });
   }
 
   return drizzle(pool, { schema, mode: "default" });
