@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import AttendanceCenter from "./components/AttendanceCenter";
 import AttendanceSettings from "./components/AttendanceSettings";
 import MonitoringCenter from "./components/MonitoringCenter";
@@ -165,6 +165,9 @@ export default function Home() {
     description: string;
   } | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
+  const [employeeRoleFilter, setEmployeeRoleFilter] = useState("Semua");
+  const [employeeGroupByCategory, setEmployeeGroupByCategory] = useState(true);
   const [employeePositions, setEmployeePositions] = useState<EmployeeOrgPosition[]>([]);
   const [showEmployee, setShowEmployee] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -849,7 +852,22 @@ export default function Home() {
             <MonthlyAttendanceReport />
           ) : (
             <>
-              {active === "Data Pegawai" ? (
+              {active === "Data Pegawai" ? (() => {
+                const visibleEmployees = employees.filter(e => {
+                  const matchSearch = e.fullName.toLowerCase().includes(employeeSearchQuery.toLowerCase()) || e.employeeNumber.includes(employeeSearchQuery);
+                  const matchRole = employeeRoleFilter === "Semua" || (e.position || "—") === employeeRoleFilter;
+                  return matchSearch && matchRole;
+                });
+                const groupedEmployees = employeeGroupByCategory
+                  ? visibleEmployees.reduce((acc, e) => {
+                      const unit = e.unitSubsection || "Tanpa Unit/Subbagian";
+                      if (!acc[unit]) acc[unit] = [];
+                      acc[unit].push(e);
+                      return acc;
+                    }, {} as Record<string, typeof employees>)
+                  : { "Semua": visibleEmployees };
+
+                return (
                 <section className="employee-page">
                   <div className="page-title">
                     <div>
@@ -864,9 +882,35 @@ export default function Home() {
                       <Icon name="plus" /> Tambah Pegawai
                     </button>
                   </div>
-                  <div className="employee-summary">
-                    <strong>{employees.length}</strong>
-                    <span>Total data pegawai</span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem", alignItems: "center", background: "#fff", padding: "1rem", borderRadius: "12px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <strong style={{ fontSize: "1.5rem" }}>{visibleEmployees.length}</strong>
+                      <span style={{ fontSize: "0.85rem", color: "#666" }}>Pegawai</span>
+                    </div>
+                    <div style={{ width: "1px", height: "30px", background: "#eee", margin: "0 0.5rem" }}></div>
+                    <input
+                      type="search"
+                      placeholder="Cari Nama/NIP..."
+                      value={employeeSearchQuery}
+                      onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                      style={{ padding: "0.5rem 1rem", border: "1px solid #ddd", borderRadius: "8px", minWidth: "250px" }}
+                    />
+                    <select
+                      value={employeeRoleFilter}
+                      onChange={(e) => setEmployeeRoleFilter(e.target.value)}
+                      style={{ padding: "0.5rem 1rem", border: "1px solid #ddd", borderRadius: "8px", background: "#fff" }}
+                    >
+                      <option value="Semua">Semua Jabatan</option>
+                      {Array.from(new Set(employees.map(e => e.position || "—"))).map(pos => <option key={pos} value={pos}>{pos}</option>)}
+                    </select>
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.9rem", userSelect: "none" }}>
+                      <input
+                        type="checkbox"
+                        checked={employeeGroupByCategory}
+                        onChange={(e) => setEmployeeGroupByCategory(e.target.checked)}
+                      />
+                      Kelompokkan berdasarkan Unit
+                    </label>
                   </div>
                   <div className="employee-table-wrap">
                     <table className="employee-table">
@@ -887,60 +931,70 @@ export default function Home() {
                         </tr>
                       </thead>
                       <tbody>
-                        {employees.length ? (
-                          employees.map((employee) => (
-                            <tr key={employee.id}>
-                              <td>
-                                <b>{employee.fullName}</b>
-                              </td>
-                              <td>{employee.employeeNumber}</td>
-                              <td>{employee.email}</td>
-                              <td>{employee.phone}</td>
-                              <td>{employee.position || "—"}</td>
-                              <td>{employee.unitSubsection || "—"}</td>
-                              <td>
-                                {employees.find(
-                                  (e) => e.id === employee.directSupervisorId,
-                                )?.fullName || "—"}
-                              </td>
-                              <td>
-                                <span className="status-badge">
-                                  {employee.employeeStatus}
-                                </span>
-                              </td>
-                              <td>
-                                <span className="status-badge">
-                                  {employee.accountStatus}
-                                </span>
-                              </td>
-                              <td>
-                                <span className="access-badge">
-                                  {employee.accessLevel}
-                                </span>
-                              </td>
-                              <td>{[employee.operatorAttendance&&"Operator Absensi",employee.operatorSakip&&"Operator SAKIP"].filter(Boolean).join(" · ")||"—"}</td>
-                              <td>
-                                {canEditEmployees?<div className="row-actions">
-                                  <button
-                                    onClick={() => openEmployee(employee)}
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    className="danger"
-                                    onClick={() => deleteEmployee(employee)}
-                                  >
-                                    Nonaktifkan
-                                  </button>
-                                </div>:<span className="field-help">Lihat saja</span>}
-                              </td>
-                            </tr>
+                        {Object.keys(groupedEmployees).length ? (
+                          Object.entries(groupedEmployees).map(([unit, list]) => (
+                            <React.Fragment key={unit}>
+                              {employeeGroupByCategory && (
+                                <tr style={{ background: "#f8fafc" }}>
+                                  <td colSpan={12} style={{ fontWeight: "600", color: "#334155", padding: "0.75rem 1rem" }}>
+                                    {unit} <span style={{ fontWeight: "normal", color: "#64748b", marginLeft: "0.5rem" }}>({list.length} pegawai)</span>
+                                  </td>
+                                </tr>
+                              )}
+                              {list.map((employee) => (
+                                <tr key={employee.id}>
+                                  <td>
+                                    <b>{employee.fullName}</b>
+                                  </td>
+                                  <td>{employee.employeeNumber}</td>
+                                  <td>{employee.email}</td>
+                                  <td>{employee.phone}</td>
+                                  <td>{employee.position || "—"}</td>
+                                  <td>{employee.unitSubsection || "—"}</td>
+                                  <td>
+                                    {employees.find(
+                                      (e) => e.id === employee.directSupervisorId,
+                                    )?.fullName || "—"}
+                                  </td>
+                                  <td>
+                                    <span className="status-badge">
+                                      {employee.employeeStatus}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span className="status-badge">
+                                      {employee.accountStatus}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span className="access-badge">
+                                      {employee.accessLevel}
+                                    </span>
+                                  </td>
+                                  <td>{[employee.operatorAttendance&&"Operator Absensi",employee.operatorSakip&&"Operator SAKIP"].filter(Boolean).join(" · ")||"—"}</td>
+                                  <td>
+                                    {canEditEmployees?<div className="row-actions">
+                                      <button
+                                        onClick={() => openEmployee(employee)}
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        className="danger"
+                                        onClick={() => deleteEmployee(employee)}
+                                      >
+                                        Nonaktifkan
+                                      </button>
+                                    </div>:<span className="field-help">Lihat saja</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
                           ))
                         ) : (
                           <tr>
                             <td colSpan={12} className="empty-state">
-                              Belum ada data pegawai. Klik “Tambah Pegawai”
-                              untuk memulai.
+                              Belum ada data pegawai yang sesuai dengan filter.
                             </td>
                           </tr>
                         )}
@@ -948,7 +1002,8 @@ export default function Home() {
                     </table>
                   </div>
                 </section>
-              ) : active === "Rule Absensi" ? (
+                );
+              })() : active === "Rule Absensi" ? (
                 <section className="rule-page">
                   <div className="page-title">
                     <div>
