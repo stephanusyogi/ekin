@@ -72,6 +72,7 @@ export default function PerformanceAgreementCenter() {
     [filter, setFilter] = useState("Semua"),
     [pkTypeFilter, setPkTypeFilter] = useState("Semua"),
     [rktFilter, setRktFilter] = useState("Semua"),
+    [viewingActions, setViewingActions] = useState<any>(null),
     [monevTypeFilter, setMonevTypeFilter] = useState("Semua"),
     [monevYearFilter, setMonevYearFilter] = useState(String(year)),
     [monevUnitFilter, setMonevUnitFilter] = useState("Semua"),
@@ -287,6 +288,7 @@ export default function PerformanceAgreementCenter() {
                   </span>
                   <span>
                     Rencana Aksi <b>{r.actions.length}</b>
+                    {r.actions.length > 0 && <button style={{ marginLeft: "0.5rem", fontSize: "0.75rem", padding: "0.2rem 0.5rem", border: "1px solid #ccc", borderRadius: "4px", background: "#f9f9f9", cursor: "pointer" }} onClick={() => setViewingActions(r)}>Lihat RAK</button>}
                   </span>
                 </div>
                 <div className="rkt-hierarchy">{r.programs.map((p:any, pn:number) => <div key={pn}>
@@ -919,6 +921,38 @@ export default function PerformanceAgreementCenter() {
               >
                 Simpan Rencana Aksi
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {viewingActions && (
+        <div className="modal-backdrop">
+          <div className="modal pk-modal">
+            <span>DAFTAR RENCANA AKSI</span>
+            <h3>RKT {viewingActions.rktType} · {viewingActions.year}</h3>
+            <div className="rkt-list" style={{ maxHeight: "60vh", overflowY: "auto", paddingRight: "0.5rem" }}>
+              {viewingActions.actions.map((a: any) => (
+                <article key={a.id} style={{ marginBottom: "1rem", padding: "1rem", border: "1px solid #eee", borderRadius: "8px" }}>
+                  <div className="pk-card-head" style={{ marginBottom: "0" }}>
+                    <div>
+                      <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1rem" }}>{a.title}</h3>
+                      <p style={{ margin: "0 0 0.5rem 0", color: "#555" }}>{a.description}</p>
+                      <p style={{ margin: 0, fontSize: "0.85rem", color: "#777" }}>
+                        PIC: {plans.employees.find((e:any) => e.id === a.picEmployeeId)?.fullName || "Belum ditentukan"} · Unit: {a.responsibleUnit} · Deadline: {a.deadline || "Belum ditentukan"}
+                      </p>
+                    </div>
+                  </div>
+                  {plans.canManage && <div className="row-actions" style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #eee" }}>
+                    <button onClick={() => { setActionForm({ ...a, rktId: viewingActions.rows[0]?.id || "" }); setShowAction(true); setViewingActions(null); }}>Edit</button>
+                    <button className="danger" onClick={() => { if (confirm("Yakin ingin menghapus rencana aksi ini?")) { request(`/api/work-plans?actionId=${a.id}`, {}, "DELETE"); setViewingActions(null); } }}>Hapus</button>
+                  </div>}
+                </article>
+              ))}
+              {!viewingActions.actions.length && <p>Belum ada rencana aksi.</p>}
+            </div>
+            <div className="modal-actions">
+              <button onClick={() => setViewingActions(null)}>Tutup</button>
+              {plans.canManage && <button className="primary" onClick={() => { setActionForm({ rktId: viewingActions.rows[0]?.id || "", title: "", description: "", responsibleUnit: "", picEmployeeId: "", deadline: "" }); setShowAction(true); setViewingActions(null); }}>+ Rencana Aksi</button>}
             </div>
           </div>
         </div>

@@ -111,6 +111,16 @@ export async function DELETE(request: Request) {
     const { me, db } = await actor(request);
     if (!managers.includes(me.role) && !hasSakipOperator(me)) return Response.json({ error: "Hanya pengelola sistem atau Operator SAKIP yang dapat menghapus RKT" }, { status: 403 });
     const documentKey = new URL(request.url).searchParams.get("documentKey") || "";
+    const actionId = new URL(request.url).searchParams.get("actionId");
+    if (actionId) {
+      const [row] = await db.select().from(actionPlans).where(eq(actionPlans.id, Number(actionId))).limit(1);
+      if (!row) return Response.json({ error: "Rencana Aksi tidak ditemukan" }, { status: 404 });
+      const linkedPk = await db.select().from(performanceAgreements).where(eq(performanceAgreements.sourceActionPlanId, Number(actionId)));
+      if (linkedPk.length) return Response.json({ error: "Rencana Aksi sudah digunakan di PK dan tidak dapat dihapus" }, { status: 400 });
+      await db.delete(actionPlans).where(eq(actionPlans.id, Number(actionId)));
+      await logSecurityEvent(request,{actorEmail:me.email,actorRole:me.role,action:"DELETE",resourceType:"action_plan",resourceId:actionId,before:row});
+      return Response.json({ success: true });
+    }
     const legacyId = documentKey.startsWith("legacy-") ? Number(documentKey.replace("legacy-", "")) : null;
     const rows = legacyId
       ? await db.select().from(annualWorkPlans).where(eq(annualWorkPlans.id, legacyId))
