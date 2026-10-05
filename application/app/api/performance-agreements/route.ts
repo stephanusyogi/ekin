@@ -132,8 +132,8 @@ export async function GET(request: Request) {
         evaluations: evaluations.filter((e) => e.agreementId === a.id).map((e) => ({ ...e, evidenceLinks: JSON.parse(e.evidenceLinks || "[]") })),
       });}),
     });
-  } catch {
-    return Response.json({ error: "Akses tidak tersedia" }, { status: 403 });
+  } catch (error) {
+    return Response.json({ error: "Akses tidak tersedia", details: error instanceof Error ? error.message : String(error) }, { status: 403 });
   }
 }
 export async function POST(request: Request) {
