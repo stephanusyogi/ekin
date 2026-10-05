@@ -24,7 +24,11 @@ async function refreshIndicator(db: ReturnType<typeof getDb>, indicatorId: numbe
   await db.update(performanceIndicators).set({
     progress: latest?.progress || 0,
     realization: latest?.outputRealization || "",
-    evidence: latest ? cleanLinks(JSON.parse(latest.evidenceLinks || "[]")).join("\n") : "",
+    evidence: (() => {
+      if (!latest) return "";
+      try { return cleanLinks(JSON.parse(latest.evidenceLinks || "[]")).join("\n"); }
+      catch { return latest.evidenceLinks || ""; }
+    })(),
   }).where(eq(performanceIndicators.id, indicatorId));
 }
 
