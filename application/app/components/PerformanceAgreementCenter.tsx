@@ -288,7 +288,7 @@ export default function PerformanceAgreementCenter() {
                   </span>
                   <span>
                     Rencana Aksi <b>{r.actions.length}</b>
-                    {r.actions.length > 0 && <button style={{ marginLeft: "0.5rem", fontSize: "0.75rem", padding: "0.2rem 0.5rem", border: "1px solid #ccc", borderRadius: "4px", background: "#f9f9f9", cursor: "pointer" }} onClick={() => setViewingActions(r)}>Lihat RAK</button>}
+                    {r.actions.length > 0 && <span style={{ marginLeft: "0.5rem", fontSize: "0.85rem", color: "#16a34a", cursor: "pointer", textDecoration: "none" }} onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"} onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"} onClick={() => setViewingActions(r)}>Lihat RAK</span>}
                   </span>
                 </div>
                 <div className="rkt-hierarchy">{r.programs.map((p:any, pn:number) => <div key={pn}>
