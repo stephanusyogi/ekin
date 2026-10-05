@@ -70,6 +70,8 @@ export default function PerformanceAgreementCenter() {
     [saving, setSaving] = useState(false),
     [toast, setToast] = useState(""),
     [filter, setFilter] = useState("Semua"),
+    [pkTypeFilter, setPkTypeFilter] = useState("Semua"),
+    [rktFilter, setRktFilter] = useState("Semua"),
     [monevTypeFilter, setMonevTypeFilter] = useState("Semua"),
     [monevYearFilter, setMonevYearFilter] = useState(String(year)),
     [monevUnitFilter, setMonevUnitFilter] = useState("Semua"),
@@ -199,8 +201,9 @@ export default function PerformanceAgreementCenter() {
     });
   };
   const visible = data.agreements.filter(
-      (a: any) => filter === "Semua" || a.status === filter,
+      (a: any) => (filter === "Semua" || a.status === filter) && (pkTypeFilter === "Semua" || a.agreementLevel === pkTypeFilter),
     ),
+    visibleRkt = (plans.documents || []).filter((r: any) => rktFilter === "Semua" || r.rktType === rktFilter),
     avg = visible.length
       ? Math.round(
           visible
@@ -252,9 +255,18 @@ export default function PerformanceAgreementCenter() {
         </button>
       </div>
       {tab === "rkt" && (
-        <div className="rkt-list">
-          {plans.documents?.length ? (
-            plans.documents.map((r: any) => (
+        <>
+          <div className="pk-filter">
+            <label>
+              Jenis RKT
+              <select value={rktFilter} onChange={(e) => setRktFilter(e.target.value)}>
+                {["Semua", "Ketua", "Sekretaris", "Kesekretariatan", "Instansi"].map((x) => <option key={x}>{x}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="rkt-list">
+            {visibleRkt.length ? (
+              visibleRkt.map((r: any) => (
               <article key={r.documentKey}>
                 <div className="pk-card-head">
                   <div>
@@ -296,6 +308,7 @@ export default function PerformanceAgreementCenter() {
             </div>
           )}
         </div>
+        </>
       )}
       {tab === "pk" && (
         <>
@@ -328,6 +341,12 @@ export default function PerformanceAgreementCenter() {
             </article>
           </div>
           <div className="pk-filter">
+            <label>
+              Level / Tipe
+              <select value={pkTypeFilter} onChange={(e) => setPkTypeFilter(e.target.value)}>
+                {["Semua", "Ketua", "Sekretaris", "Kasubag", "Staf"].map((x) => <option key={x}>{x}</option>)}
+              </select>
+            </label>
             <label>
               Status
               <select
