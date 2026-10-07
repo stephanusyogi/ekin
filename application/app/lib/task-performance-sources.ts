@@ -22,7 +22,8 @@ export async function allowedTaskPerformanceSources(user: User) {
       if (position.includes("anggota")) ownerIds = chairIds;
       else if (user.role === "admin") ownerIds = [...new Set([self.id, ...chairIds])];
       else if (position.includes("ketua")) ownerIds = [self.id];
-      else if (self.directSupervisorId) ownerIds = [self.directSupervisorId];
+      else if (self.directSupervisorId) ownerIds = [self.id, self.directSupervisorId];
+      else ownerIds = [self.id];
       allowedAgreements = approved.filter(agreement => ownerIds.includes(agreement.employeeId));
     }
   }
