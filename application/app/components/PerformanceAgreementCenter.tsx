@@ -316,7 +316,7 @@ export default function PerformanceAgreementCenter() {
                     {r.actions.filter((a:any) => o.indicators.some((i:any) => String(i.id) === String(a.rktId))).map((a:any) => (
                        <div key={a.id} style={{marginLeft: "1rem", padding: "0.5rem 0.75rem", background: "#f8fafc", borderLeft: "3px solid #3b82f6", marginTop: "0.5rem"}}>
                           <span><b>RAK:</b> {a.title} (Batas Waktu: {a.deadline || "—"})</span>
-                          <span style={{color: "#64748b", display: "block", marginTop: "0.25rem"}}>PIC: {a.pic?.fullName || "Belum ditentukan"} - {a.description}</span>
+                          <span style={{color: "#64748b", display: "block", marginTop: "0.25rem"}}>PIC: {plans.employees?.find((e:any) => e.id === a.picEmployeeId)?.fullName || "Belum ditentukan"} - {a.description}</span>
                           {plans.canManage && <div className="row-actions" style={{marginTop: "0.5rem", justifyContent: "flex-start"}}><button onClick={() => { setActionForm({ ...a, rktId: a.rktId }); setShowAction(true); }}>Edit</button><button className="danger" onClick={() => { if(confirm("Yakin ingin menghapus rencana aksi ini?")) request(`/api/work-plans?actionId=${a.id}`, {}, "DELETE"); }}>Hapus</button></div>}
                        </div>
                     ))}
