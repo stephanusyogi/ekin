@@ -371,7 +371,7 @@ export default function PerformanceAgreementCenter() {
             <label>
               Level / Tipe
               <select value={pkTypeFilter} onChange={(e) => setPkTypeFilter(e.target.value)}>
-                {["Semua", "Ketua", "Anggota", "Sekretaris", "Kasubag", "Staf"].map((x) => <option key={x}>{x}</option>)}
+                {["Semua", "Ketua", "Anggota", "Sekretaris", "Subbag", "Staf"].map((x) => <option key={x}>{x}</option>)}
               </select>
             </label>
             <label>
