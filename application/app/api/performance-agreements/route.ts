@@ -42,29 +42,6 @@ export async function GET(request: Request) {
         .orderBy(asc(performanceAgreements.year));
     const manageAll=managers.includes(me.role)||hasSakipOperator(me);
     let visible = all;
-    if (!manageAll) {
-      const own = all.filter(
-        (a) => a.employeeId === self?.id || a.supervisorId === self?.id,
-      );
-      if (self?.position === "Anggota") {
-        const links = await db
-            .select()
-            .from(organizationCoordinations)
-            .where(
-              eq(organizationCoordinations.commissionerEmployeeId, self.id),
-            ),
-          units = links.map((x) => x.unitSubsection),
-          ids = staff
-            .filter((e) => units.includes(e.unitSubsection))
-            .map((e) => e.id);
-        visible = all.filter(
-          (a) =>
-            own.some((x) => x.id === a.id) ||
-            ids.includes(a.employeeId) ||
-            a.coordinationCommissionerId === self.id,
-        );
-      } else visible = own;
-    }
     const ids = visible.map((a) => a.id),
       indicators = ids.length
         ? await db

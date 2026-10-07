@@ -626,6 +626,7 @@ export default function PerformanceAgreementCenter() {
                 </label>
                 <label>
                   PK induk/cascading
+                  <input type="text" placeholder="Ketik untuk mencari PK..." value={form._searchPk || ""} onChange={(e) => setForm({...form, _searchPk: e.target.value})} style={{marginBottom: "4px"}} />
                   <select
                     value={form.parentAgreementId}
                     onChange={(e) =>
@@ -633,9 +634,9 @@ export default function PerformanceAgreementCenter() {
                     }
                   >
                     <option value="">PK mandiri</option>
-                    {data.agreements.map((x: any) => (
+                    {data.agreements.filter((x:any) => !form._searchPk || `${x.employee?.fullName} ${x.title} ${x.sourceRkt?.objective} ${x.objectives?.[0]?.objective}`.toLowerCase().includes(form._searchPk.toLowerCase())).map((x: any) => (
                       <option value={x.id} key={x.id}>
-                        #{x.id} {x.employee?.fullName} · {x.title}
+                        #{x.id} {x.employee?.fullName} · {x.title} (Sasaran: {x.sourceRkt?.objective || x.objectives?.[0]?.objective || "—"})
                       </option>
                     ))}
                   </select>
