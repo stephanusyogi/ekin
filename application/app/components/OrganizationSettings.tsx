@@ -12,6 +12,7 @@ export default function OrganizationSettings(){
   const [employees,setEmployees]=useState<Employee[]>([]),[links,setLinks]=useState<Coordination[]>([]),[units,setUnits]=useState<Unit[]>([]),[positions,setPositions]=useState<Position[]>([]),[member,setMember]=useState(""),[coordUnit,setCoordUnit]=useState(""),[mode,setMode]=useState<"unit"|"position">("position"),[unitForm,setUnitForm]=useState(unitBlank),[positionForm,setPositionForm]=useState(positionBlank),[editing,setEditing]=useState<number|null>(null),[toast,setToast]=useState("");
   const notify=(message:string)=>{setToast(message);setTimeout(()=>setToast(""),2500)};
   const load=()=>fetch("/api/admin/organization").then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error);setEmployees(data.employees||[]);setLinks(data.coordinations||[]);setUnits(data.units||[]);setPositions(data.positions||[])}).catch(error=>notify(error.message||"Struktur belum dapat dimuat"));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{load()},[]);
   const commissioners=useMemo(()=>employees.filter(employee=>employee.position==="Anggota"),[employees]);
   const subbags=useMemo(()=>units.filter(unit=>unit.status==="Aktif"&&unit.type==="Subbagian"),[units]);

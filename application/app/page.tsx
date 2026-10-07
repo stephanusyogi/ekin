@@ -329,6 +329,7 @@ export default function Home() {
     if(r.ok){window.location.reload();return;}
     const d=await r.json().catch(()=>({}));setAccessMessage(d.error||"Sesi belum dapat diambil alih");setAccessState(r.status===401?"login":"denied");
   };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const checkIn = async () => {
     if (clockedIn || saving) {
       notify("Absensi Anda sudah tercatat");
