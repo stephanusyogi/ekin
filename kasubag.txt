@@ -1,0 +1,36 @@
+﻿
+(61, 16, 'Melakukan review atas SOP PPID yang telah ada, Menerbitkan Surat Keputusan Tim PPID 2026, Menerbitkan Surat 
+Keputusan Operator PPID 2026, Menerbitkan Surat Keputusan Daftar Informasi Publik PPID 2026, Memberikan layanan PPID 
+secara komprehensif kepada pemohon layanan, baik secara Online maupun Offline', '', 'Subbag SDM Parmas', 83, 
+'2026-12-31', 0, '', '', 'Belum Diverifikasi', 'alamsyahfajrin123@gmail.com', '2026-10-07 01:45:57', '2026-10-07 
+01:45:57'),
+(62, 17, 'Melaksanakan Sosialisasi Talkshow [8 kali], Produksi konten Sosialisasi dan publikasi melalui media sosial 
+[Instagram, Youtube, Website]', '', 'Subbag SDM Parmas', 83, '2026-12-31', 0, '', '', 'Belum Diverifikasi', 
+'alamsyahfajrin123@gmail.com', '2026-10-07 01:47:16', '2026-10-07 03:49:34'),
+(64, 19, 'Melaksanakan Pendidikan pemilih kepada 3 segmen pemilih dengan metode tatap muka [10 kali], Menyusun Laporan 
+Bakohumas, Menyusun Laporan Sosdiklih, Menyusun Buku Infografis Pilkada Ngawi 2024', '', 'Subbag SDM Parmas', 83, 
+'2026-12-31', 0, '', '', 'Belum Diverifikasi', 'alamsyahfajrin123@gmail.com', '2026-10-07 01:49:05', '2026-10-07 
+01:49:05'),
+(75, 28, 'Fasilitasi Layanan Kenaikan Pangkat (KP), Fasilitasi Apel dan Upacara, Fasilitasi Layanan Kenaikan Gaji 
+Berkala (KGB), Penyusunan SKP dan Penilaian SKP, Fasilitasi dokumen Absensi, Tunjangan Kinerja, Capaian Output 
+Kinerja, Layanan Pegawai CPNS', '', 'Subbag Parmas SDM', 83, '2026-12-31', 0, '', '', 'Belum Diverifikasi', 
+'alamsyahfajrin123@gmail.com', '2026-10-07 01:55:49', '2026-10-07 01:55:49'),
+(76, 29, 'Melaksanakan Pemutakhiran Data Kepegawaian pada Aplikasi SIMPEG KPU', '', 'Subbag Parmas SDM', 83, 
+'2026-12-31', 0, '', '', 'Belum Diverifikasi', 'alamsyahfajrin123@gmail.com', '2026-10-07 01:55:59', '2026-10-07 
+03:50:51'),
+(89, 'Devi Septariani, SE, M.A', '198812182010122004', NULL, '-', 'Staf', 'Subbag SDM Parmas', 83, 14, 0, 0, 'Aktif', 
+'Dinonaktifkan', 'User', '2026-09-01 02:14:12', '2026-10-05 09:49:42'),
+(90, 'Bimo Wartono', '198003182025211015', 'sakipkpungawi@gmail.com', '-', 'Staf', 'Subbag SDM Parmas', 83, 15, 0, 0, 
+'Aktif', 'Aktif', 'User', '2026-09-01 02:14:12', '2026-10-07 03:02:38'),
+(98, 'Fajar Kusuma Mahardhika,S.H', '199511252025061006', 'falalam250@gmail.com', '-', 'Staf', 'Subbag SDM Parmas', 
+83, 24, 0, 0, 'Aktif', 'Aktif', 'User', '2026-10-05 09:39:28', '2026-10-07 04:37:17'),
+(103, 'Jiman,S.Pd', '199406192025211037', NULL, '-', 'Staf', 'Subbag KUL', 83, 29, 0, 0, 'Aktif', 'Dinonaktifkan', 
+'User', '2026-10-05 09:46:06', '2026-10-05 09:49:42'),
+(18, 'Subbag SDM Parmas', 'Subbagian', 15, 83, 33, 'Aktif', '2026-09-01 02:14:04', '2026-10-07 03:02:01'),
+(55, 83, 80, 2026, 'Perjanjian Kinerja Tahunan', 'Subbag', 'RKT Kesekretariatan', 16, 61, 21, NULL, '', '2026-01-01', 
+'2026-12-31', '', 'Draft', 'fajarrrralamsyh@gmail.com', NULL, NULL, '', 1, '2026-10-07 04:30:45', '2026-10-07 
+04:30:45'),
+(56, 98, 83, 2026, 'Perjanjian Kinerja Tahunan', 'Staf', 'RKT Kesekretariatan', 16, 61, 55, NULL, '', '2026-01-01', 
+'2026-12-31', '', 'Draft', 'falalam250@gmail.com', NULL, NULL, '', 1, '2026-10-07 04:44:30', '2026-10-07 04:44:30');
+
+

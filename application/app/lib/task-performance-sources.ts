@@ -10,7 +10,7 @@ export async function allowedTaskPerformanceSources(user: User) {
   const db = getDb();
   const staff = await db.select().from(employees).orderBy(asc(employees.fullName));
   const self = user.isEmployee ? staff.find(employee => employee.id === user.employee.id) : null;
-  const approved = await db.select().from(performanceAgreements).where(eq(performanceAgreements.status, "Disetujui")).orderBy(asc(performanceAgreements.year));
+  const approved = await db.select().from(performanceAgreements).where(inArray(performanceAgreements.status, ["Draft", "Diajukan", "Disetujui"])).orderBy(asc(performanceAgreements.year));
 
   let allowedAgreements = approved;
   if (!["super_user", "super_admin"].includes(user.role) && !hasSakipOperator(user)) {
