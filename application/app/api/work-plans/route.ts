@@ -52,6 +52,13 @@ export async function POST(request: Request) {
     if (!canManage) return Response.json({ error: "Tidak berwenang mengelola RKT" }, { status: 403 });
     if (p.kind === "action") {
       if (!p.rktId || !p.title?.trim()) return Response.json({ error: "RKT dan uraian Rencana Aksi wajib diisi" }, { status: 400 });
+      if (p.id) {
+        const [before] = await db.select().from(actionPlans).where(eq(actionPlans.id, Number(p.id))).limit(1);
+        await db.update(actionPlans).set({ rktId: Number(p.rktId), title: p.title.trim(), description: (p.description || "").trim(), responsibleUnit: (p.responsibleUnit || "").trim(), picEmployeeId: p.picEmployeeId ? Number(p.picEmployeeId) : null, deadline: p.deadline || "", updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') }).where(eq(actionPlans.id, Number(p.id)));
+        const [row] = await db.select().from(actionPlans).where(eq(actionPlans.id, Number(p.id))).limit(1);
+        await logSecurityEvent(request,{actorEmail:me.email,actorRole:me.role,action:"UPDATE",resourceType:"action_plan",resourceId:row.id,before,after:row});
+        return Response.json({ action: row }, { status: 200 });
+      }
       const [res] = await db.insert(actionPlans).values({ rktId: Number(p.rktId), title: p.title.trim(), description: (p.description || "").trim(), responsibleUnit: (p.responsibleUnit || "").trim(), picEmployeeId: p.picEmployeeId ? Number(p.picEmployeeId) : null, deadline: p.deadline || "", createdBy: me.email });
       const [row] = await db.select().from(actionPlans).where(eq(actionPlans.id, res.insertId)).limit(1);
       await logSecurityEvent(request,{actorEmail:me.email,actorRole:me.role,action:"CREATE",resourceType:"action_plan",resourceId:row.id,after:row});

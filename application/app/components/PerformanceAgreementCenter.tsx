@@ -258,6 +258,24 @@ export default function PerformanceAgreementCenter() {
       </div>
       {tab === "rkt" && (
         <>
+          <div className="pk-summary">
+            <article>
+              <b>{visibleRkt.length}</b>
+              <span>Total RKT</span>
+            </article>
+            <article>
+              <b>{visibleRkt.reduce((sum: number, r: any) => sum + r.actions.length, 0)}</b>
+              <span>Total Rencana Aksi</span>
+            </article>
+            <article>
+              <b>{visibleRkt.reduce((sum: number, r: any) => sum + r.programs.length, 0)}</b>
+              <span>Total Program</span>
+            </article>
+            <article>
+              <b>{visibleRkt.reduce((sum: number, r: any) => sum + r.rows.length, 0)}</b>
+              <span>Total Indikator</span>
+            </article>
+          </div>
           <div className="pk-filter">
             <label>
               Jenis RKT
@@ -289,13 +307,19 @@ export default function PerformanceAgreementCenter() {
                   </span>
                   <span>
                     Rencana Aksi <b>{r.actions.length}</b>
-                    {r.actions.length > 0 && <span style={{ marginLeft: "0.5rem", fontSize: "0.85rem", color: "#16a34a", cursor: "pointer", textDecoration: "none" }} onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"} onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"} onClick={() => setViewingActions(r)}>Lihat RAK</span>}
                   </span>
                 </div>
                 <div className="rkt-hierarchy">{r.programs.map((p:any, pn:number) => <div key={pn}>
                   <b>{pn + 1}. {p.programActivity}</b>
                   {p.objectives.map((o:any, on:number) => <section key={on}><strong>{pn + 1}.{on + 1} {o.objective}</strong>
                     {o.indicators.map((i:any, ix:number) => <span key={i.id}>{pn + 1}.{on + 1}.{ix + 1} {i.indicator} · Target {i.target} {i.unit}</span>)}
+                    {r.actions.filter((a:any) => o.indicators.some((i:any) => i.id === a.rktId)).map((a:any) => (
+                       <div key={a.id} style={{marginLeft: "1rem", padding: "0.5rem", background: "#f8fafc", borderLeft: "3px solid #3b82f6", marginTop: "0.5rem"}}>
+                          <p style={{margin: 0, fontSize: "0.9rem"}}><b>RAK:</b> {a.title} (Batas Waktu: {a.deadline || "—"})</p>
+                          <p style={{margin: 0, fontSize: "0.85rem", color: "#64748b"}}>PIC: {a.pic?.fullName || "Belum ditentukan"} - {a.description}</p>
+                          {plans.canManage && <div style={{marginTop: "0.25rem"}}><button style={{fontSize: "0.75rem", padding: "2px 8px", marginRight: "0.5rem"}} onClick={() => { setActionForm({ ...a, rktId: a.rktId }); setShowAction(true); }}>Edit</button><button className="danger" style={{fontSize: "0.75rem", padding: "2px 8px"}} onClick={() => { if(confirm("Yakin ingin menghapus rencana aksi ini?")) request(`/api/work-plans?actionId=${a.id}`, {}, "DELETE"); }}>Hapus</button></div>}
+                       </div>
+                    ))}
                   </section>)}
                 </div>)}</div>
                 {plans.canManage && <div className="row-actions">
@@ -347,7 +371,7 @@ export default function PerformanceAgreementCenter() {
             <label>
               Level / Tipe
               <select value={pkTypeFilter} onChange={(e) => setPkTypeFilter(e.target.value)}>
-                {["Semua", "Ketua", "Sekretaris", "Kasubag", "Staf"].map((x) => <option key={x}>{x}</option>)}
+                {["Semua", "Ketua", "Anggota", "Sekretaris", "Kasubag", "Staf"].map((x) => <option key={x}>{x}</option>)}
               </select>
             </label>
             <label>
@@ -568,6 +592,7 @@ export default function PerformanceAgreementCenter() {
                 </label>
                 <label>
                   RKT terkait (opsional)
+                  <input type="text" placeholder="Ketik untuk mencari RKT..." value={form._searchRkt || ""} onChange={(e) => setForm({...form, _searchRkt: e.target.value})} style={{marginBottom: "4px"}} />
                   <select
                     value={form.sourceRktId}
                     onChange={(e) =>
@@ -575,7 +600,7 @@ export default function PerformanceAgreementCenter() {
                     }
                   >
                     <option value="">Tidak terkait langsung</option>
-                    {data.rkt.map((x: any) => (
+                    {data.rkt.filter((x:any) => !form._searchRkt || `${x.scope} ${x.objective}`.toLowerCase().includes(form._searchRkt.toLowerCase())).map((x: any) => (
                       <option value={x.id} key={x.id}>
                         {x.scope} · {x.objective}
                       </option>
@@ -584,6 +609,7 @@ export default function PerformanceAgreementCenter() {
                 </label>
                 <label>
                   Rencana Aksi terkait
+                  <input type="text" placeholder="Ketik untuk mencari Rencana Aksi..." value={form._searchRak || ""} onChange={(e) => setForm({...form, _searchRak: e.target.value})} style={{marginBottom: "4px"}} />
                   <select
                     value={form.sourceActionPlanId}
                     onChange={(e) =>
@@ -591,7 +617,7 @@ export default function PerformanceAgreementCenter() {
                     }
                   >
                     <option value="">Tidak ada</option>
-                    {data.actionPlans.map((x: any) => (
+                    {data.actionPlans.filter((x:any) => !form._searchRak || x.title.toLowerCase().includes(form._searchRak.toLowerCase())).map((x: any) => (
                       <option value={x.id} key={x.id}>
                         {x.title}
                       </option>
@@ -846,8 +872,16 @@ export default function PerformanceAgreementCenter() {
         <div className="modal-backdrop">
           <div className="modal">
             <span>RENCANA AKSI</span>
-            <h3>Turunkan RKT</h3>
+            <h3>{actionForm.id ? "Edit Rencana Aksi" : "Turunkan RKT"}</h3>
             <div className="module-form">
+              <label>
+                Sasaran Terkait
+                <select value={actionForm.rktId} onChange={(e) => setActionForm({...actionForm, rktId: e.target.value})}>
+                  {plans.documents?.find((r:any) => r.rows.some((row:any) => row.id === actionForm.rktId))?.programs.flatMap((p:any) => p.objectives).map((o:any) => (
+                    <option key={o.indicators[0].id} value={o.indicators[0].id}>{o.objective}</option>
+                  ))}
+                </select>
+              </label>
               <label>
                 Uraian Rencana Aksi
                 <input
