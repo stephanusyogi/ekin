@@ -1,8 +1,0 @@
-﻿-- Struktur dari tabel `performance_agreements`
-CREATE TABLE `performance_agreements` (
--- Dumping data untuk tabel `performance_agreements`
-INSERT INTO `performance_agreements` (`id`, `employee_id`, `supervisor_id`, `year`, `title`, `agreement_level`, `source_type`, `source_rkt_id`, `source_action_plan_id`, `parent_agreement_id`, `coordination_commissioner_id`, `source_description`, `period_start`, `period_end`, `notes`, `status`, `created_by`, `approved_by`, `approved_at`, `revision_notes`, `version`, `created_at`, `updated_at`) VALUES
--- Indeks untuk tabel `performance_agreements`
-ALTER TABLE `performance_agreements`
--- AUTO_INCREMENT untuk tabel `performance_agreements`
-ALTER TABLE `performance_agreements`
