@@ -313,11 +313,11 @@ export default function PerformanceAgreementCenter() {
                   <b>{pn + 1}. {p.programActivity}</b>
                   {p.objectives.map((o:any, on:number) => <section key={on}><strong>{pn + 1}.{on + 1} {o.objective}</strong>
                     {o.indicators.map((i:any, ix:number) => <span key={i.id}>{pn + 1}.{on + 1}.{ix + 1} {i.indicator} · Target {i.target} {i.unit}</span>)}
-                    {r.actions.filter((a:any) => o.indicators.some((i:any) => i.id === a.rktId)).map((a:any) => (
-                       <div key={a.id} style={{marginLeft: "1rem", padding: "0.5rem", background: "#f8fafc", borderLeft: "3px solid #3b82f6", marginTop: "0.5rem"}}>
-                          <p style={{margin: 0, fontSize: "0.9rem"}}><b>RAK:</b> {a.title} (Batas Waktu: {a.deadline || "—"})</p>
-                          <p style={{margin: 0, fontSize: "0.85rem", color: "#64748b"}}>PIC: {a.pic?.fullName || "Belum ditentukan"} - {a.description}</p>
-                          {plans.canManage && <div style={{marginTop: "0.25rem"}}><button style={{fontSize: "0.75rem", padding: "2px 8px", marginRight: "0.5rem"}} onClick={() => { setActionForm({ ...a, rktId: a.rktId }); setShowAction(true); }}>Edit</button><button className="danger" style={{fontSize: "0.75rem", padding: "2px 8px"}} onClick={() => { if(confirm("Yakin ingin menghapus rencana aksi ini?")) request(`/api/work-plans?actionId=${a.id}`, {}, "DELETE"); }}>Hapus</button></div>}
+                    {r.actions.filter((a:any) => o.indicators.some((i:any) => String(i.id) === String(a.rktId))).map((a:any) => (
+                       <div key={a.id} style={{marginLeft: "1rem", padding: "0.5rem 0.75rem", background: "#f8fafc", borderLeft: "3px solid #3b82f6", marginTop: "0.5rem"}}>
+                          <span><b>RAK:</b> {a.title} (Batas Waktu: {a.deadline || "—"})</span>
+                          <span style={{color: "#64748b", display: "block", marginTop: "0.25rem"}}>PIC: {a.pic?.fullName || "Belum ditentukan"} - {a.description}</span>
+                          {plans.canManage && <div className="row-actions" style={{marginTop: "0.5rem", justifyContent: "flex-start"}}><button onClick={() => { setActionForm({ ...a, rktId: a.rktId }); setShowAction(true); }}>Edit</button><button className="danger" onClick={() => { if(confirm("Yakin ingin menghapus rencana aksi ini?")) request(`/api/work-plans?actionId=${a.id}`, {}, "DELETE"); }}>Hapus</button></div>}
                        </div>
                     ))}
                   </section>)}
@@ -877,7 +877,7 @@ export default function PerformanceAgreementCenter() {
               <label>
                 Sasaran Terkait
                 <select value={actionForm.rktId} onChange={(e) => setActionForm({...actionForm, rktId: e.target.value})}>
-                  {plans.documents?.find((r:any) => r.rows.some((row:any) => row.id === actionForm.rktId))?.programs.flatMap((p:any) => p.objectives).map((o:any) => (
+                  {plans.documents?.find((r:any) => r.rows.some((row:any) => String(row.id) === String(actionForm.rktId)))?.programs.flatMap((p:any) => p.objectives).map((o:any) => (
                     <option key={o.indicators[0].id} value={o.indicators[0].id}>{o.objective}</option>
                   ))}
                 </select>
