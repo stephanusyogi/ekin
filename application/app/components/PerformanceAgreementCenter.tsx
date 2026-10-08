@@ -884,6 +884,22 @@ export default function PerformanceAgreementCenter() {
                 </select>
               </label>
               <label>
+                Gunakan Referensi (Opsional)
+                <select onChange={(e) => {
+                  if (!e.target.value) return;
+                  const ref = plans.documents?.flatMap((d:any) => d.actions || []).find((a:any) => String(a.id) === e.target.value);
+                  if (ref) {
+                    setActionForm({ ...actionForm, title: ref.title, description: ref.description || "", deadline: ref.deadline || "" });
+                  }
+                  e.target.value = "";
+                }}>
+                  <option value="">-- Pilih Rencana Aksi Sebelumnya --</option>
+                  {Array.from(new Map(plans.documents?.flatMap((d:any) => d.actions || []).filter(Boolean).map((a:any) => [a.title, a])).values()).map((a:any) => (
+                    <option key={a.id} value={a.id}>{a.title}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
                 Uraian Rencana Aksi
                 <input
                   value={actionForm.title}
