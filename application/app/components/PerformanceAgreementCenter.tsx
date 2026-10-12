@@ -487,13 +487,31 @@ export default function PerformanceAgreementCenter() {
                 <div className="rkt-hierarchy">{r.programs.map((p:any, pn:number) => <div key={pn}>
                   <b>{pn + 1}. {p.programActivity}</b>
                   {p.objectives.map((o:any, on:number) => <section key={on}><strong>{pn + 1}.{on + 1} {o.objective}</strong>
-                    {o.indicators.map((i:any, ix:number) => <span key={i.id}>{pn + 1}.{on + 1}.{ix + 1} {i.indicator} · Target {i.target} {i.unit}</span>)}
-                    {(() => {
-                      const indIds = o.indicators.map((i: any) => String(i.id));
-                      const indActions = r.actions.filter((a: any) => indIds.includes(String(a.rktId)));
+                    {o.indicators.map((i:any, ix:number) => {
+                      const indActions = r.actions.filter((a: any) => String(a.rktId) === String(i.id));
                       const distinctActionTitles = Array.from(new Set(indActions.map((a: any) => a.title)));
 
-                      return distinctActionTitles.map((title: any, actIdx: number) => {
+                      return (
+                        <div key={i.id} style={{ marginTop: "6px", marginBottom: "6px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                            <span style={{ margin: 0, fontWeight: 600, color: "#334155" }}>
+                              {pn + 1}.{on + 1}.{ix + 1} {i.indicator} · Target {i.target} {i.unit}
+                            </span>
+                            {plans.canManage && (
+                              <button
+                                type="button"
+                                style={{ fontSize: "8px", padding: "1px 6px", border: "1px solid #cfe0da", borderRadius: "4px", background: "#fff", color: "#168765", cursor: "pointer", flexShrink: 0 }}
+                                onClick={() => {
+                                  const defaultPicId = r.policyOwnerId || (r.rktType === "Sekretaris" ? plans.employees?.find((e: any) => e.position === "Sekretaris")?.id : plans.employees?.find((e: any) => e.position === "Ketua")?.id) || "";
+                                  setActionForm(blankActionForm(String(i.id), defaultPicId));
+                                  setShowAction(true);
+                                }}
+                              >
+                                + RAK Indikator
+                              </button>
+                            )}
+                          </div>
+                          {distinctActionTitles.map((title: any, actIdx: number) => {
                         const sharedActions = indActions.filter((a: any) => a.title === title);
                         const firstAct = sharedActions[0];
                         const assignedEmpIds = sharedActions.map((a: any) => String(a.picEmployeeId)).filter(Boolean);
@@ -721,9 +739,11 @@ export default function PerformanceAgreementCenter() {
                             )}
                           </div>
                         );
-                      });
-                    })()}
-                  </section>)}
+                      })}
+                    </div>
+                  );
+                })}
+              </section>)}
                 </div>)}</div>
                 {plans.canManage && <div className="row-actions">
                   <button className="secondary-action" onClick={() => {
@@ -1434,14 +1454,65 @@ export default function PerformanceAgreementCenter() {
             <span>RENCANA AKSI</span>
             <h3>{actionForm.id ? "Edit Rencana Aksi" : "Turunkan RKT"}</h3>
             <div className="module-form">
-              <label>
-                Sasaran Terkait
-                <select value={actionForm.rktId} onChange={(e) => setActionForm({...actionForm, rktId: e.target.value})}>
-                  {plans.documents?.find((r:any) => r.rows.some((row:any) => String(row.id) === String(actionForm.rktId)))?.programs.flatMap((p:any) => p.objectives).map((o:any) => (
-                    <option key={o.indicators[0].id} value={o.indicators[0].id}>{o.objective}</option>
-                  ))}
-                </select>
-              </label>
+              {(() => {
+                const currentDoc = plans.documents?.find((r: any) =>
+                  r.rows.some((row: any) => String(row.id) === String(actionForm.rktId))
+                ) || plans.documents?.[0];
+
+                const allObjectives = currentDoc?.programs?.flatMap((p: any) => p.objectives) || [];
+                const currentObj = allObjectives.find((o: any) =>
+                  o.indicators.some((ind: any) => String(ind.id) === String(actionForm.rktId))
+                ) || allObjectives[0];
+
+                const availableIndicators = currentObj?.indicators || [];
+
+                return (
+                  <>
+                    <label>
+                      Sasaran Terkait
+                      <select
+                        value={currentObj ? String(currentObj.indicators[0]?.id) : ""}
+                        onChange={(e) => {
+                          const chosenObj = allObjectives.find((o: any) =>
+                            String(o.indicators[0]?.id) === e.target.value
+                          );
+                          if (chosenObj && chosenObj.indicators[0]) {
+                            setActionForm((prev: any) => ({
+                              ...prev,
+                              rktId: chosenObj.indicators[0].id,
+                            }));
+                          }
+                        }}
+                      >
+                        {allObjectives.map((o: any, oIdx: number) => (
+                          <option key={oIdx} value={o.indicators[0]?.id}>
+                            {o.objective}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Indikator Kinerja Terkait
+                      <select
+                        value={String(actionForm.rktId || "")}
+                        onChange={(e) =>
+                          setActionForm((prev: any) => ({
+                            ...prev,
+                            rktId: e.target.value,
+                          }))
+                        }
+                      >
+                        {availableIndicators.map((ind: any) => (
+                          <option key={ind.id} value={ind.id}>
+                            {ind.indicator} (Target: {ind.target} {ind.unit})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                );
+              })()}
               <label>
                 Gunakan Referensi (Opsional)
                 <select onChange={(e) => {
