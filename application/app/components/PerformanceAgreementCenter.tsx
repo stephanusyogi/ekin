@@ -218,7 +218,13 @@ export default function PerformanceAgreementCenter() {
       employeeIds: currentEmpIds,
     });
   };
-  const buildPkFromInheritance = (targetEmployeeId: number | string, targetDocKey?: string, targetYear?: number) => {
+  const buildPkFromInheritance = (
+    targetEmployeeId: number | string,
+    targetDocKey?: string,
+    targetYear?: number,
+    targetRktId?: number | string,
+    targetActionId?: number | string
+  ) => {
     const emp = (data.employees || plans.employees)?.find((e: any) => String(e.id) === String(targetEmployeeId));
     if (!emp) return null;
 
@@ -248,6 +254,69 @@ export default function PerformanceAgreementCenter() {
         candidateRows = (data.rkt || []).filter((r: any) => Number(r.year) === effectiveYear);
         const candidateRktIds = new Set(candidateRows.map((r: any) => Number(r.id)));
         candidateActions = (data.actionPlans || []).filter((a: any) => candidateRktIds.has(Number(a.rktId)));
+      }
+    }
+
+    // SPECIAL CASE: Exact single RKT row / RAK inheritance (when clicked on a specific RAK in the tree)
+    if (targetRktId) {
+      const targetRow = candidateRows.find((r: any) => Number(r.id) === Number(targetRktId))
+        || (data.rkt || []).find((r: any) => Number(r.id) === Number(targetRktId))
+        || (plans.documents || []).flatMap((d: any) => d.rows || []).find((r: any) => Number(r.id) === Number(targetRktId));
+
+      if (targetRow) {
+        const targetAction = targetActionId
+          ? (candidateActions || data.actionPlans || []).find((a: any) => Number(a.id) === Number(targetActionId))
+          : (candidateActions || data.actionPlans || []).find((a: any) => Number(a.rktId) === Number(targetRktId) && String(a.picEmployeeId) === String(targetEmployeeId));
+
+        const objName = targetRow.strategicObjective || targetRow.objective || targetRow.programActivity || "Sasaran Kinerja";
+        const ind = {
+          indicator: targetRow.indicator || "Indikator Kinerja",
+          target: targetRow.target || "100",
+          unit: targetRow.unit || "%",
+          targetDisplay: targetRow.unit ? `${targetRow.target} ${targetRow.unit}` : targetRow.target,
+          sourceRktId: targetRow.id,
+          sourceMapping: { objective: "strategicObjective", indicator: "indicator", target: "target" },
+        };
+
+        const progName = targetRow.programActivity || targetRow.objective || "Program KPU";
+        const generatedObjectives = [{
+          objective: objName,
+          objectiveType: level === "Staf" ? "Sasaran Kegiatan" : "Sasaran Program (Outcome)",
+          programActivity: progName,
+          indicators: [ind],
+        }];
+
+        const generatedBudgets = [{
+          programName: progName,
+          outputDescription: targetAction?.title || (level === "Staf" ? (targetRow.indicator || "") : ""),
+          amount: 0,
+        }];
+
+        const docYear = targetRow.year || targetYear || effectiveYear;
+
+        return {
+          documentKey: targetRow.documentKey || targetDocKey || "",
+          year: docYear,
+          employeeId: emp.id,
+          agreementLevel: level,
+          title: `Perjanjian Kinerja ${emp.fullName} - ${docYear}`,
+          sourceType: targetRow.scope === "Kesekretariatan" ? "RKT Kesekretariatan" : "RKT Instansi",
+          sourceRktId: targetRow.id,
+          sourceActionPlanId: targetAction?.id || targetActionId || "",
+          sourceDescription: targetAction 
+            ? `Inheritance otomatis dari RAK: "${targetAction.title}" (${progName})`
+            : `Inheritance otomatis dari RKT: "${targetRow.indicator}" (${progName})`,
+          objectives: generatedObjectives,
+          budgets: generatedBudgets,
+          targetRktId: targetRow.id,
+          targetActionId: targetAction?.id || targetActionId || "",
+          inheritedCount: {
+            objectives: 1,
+            indicators: 1,
+            actions: targetAction ? 1 : 0,
+            docTitle: `${progName} (${docYear})`,
+          },
+        };
       }
     }
 
@@ -355,6 +424,8 @@ export default function PerformanceAgreementCenter() {
         : `Inheritance otomatis dari RKT & RAK Tahun ${docYear}`,
       objectives: generatedObjectives,
       budgets: generatedBudgets,
+      targetRktId: firstRkt?.id || "",
+      targetActionId: firstAction?.id || "",
       inheritedCount: {
         objectives: objMap.size,
         indicators: generatedObjectives.reduce((acc: number, o: any) => acc + o.indicators.length, 0),
@@ -363,12 +434,20 @@ export default function PerformanceAgreementCenter() {
       },
     };
   };
-  const applyInheritanceToForm = (targetEmployeeId: number | string, targetDocKey?: string, targetYear?: number) => {
-    const res = buildPkFromInheritance(targetEmployeeId, targetDocKey, targetYear);
+  const applyInheritanceToForm = (
+    targetEmployeeId: number | string,
+    targetDocKey?: string,
+    targetYear?: number,
+    targetRktId?: number | string,
+    targetActionId?: number | string
+  ) => {
+    const res = buildPkFromInheritance(targetEmployeeId, targetDocKey, targetYear, targetRktId, targetActionId);
     if (!res) return;
     setForm((prev: any) => ({
       ...prev,
       _docKey: res.documentKey,
+      _targetRktId: res.targetRktId,
+      _targetActionId: res.targetActionId,
       year: res.year,
       employeeId: res.employeeId,
       agreementLevel: res.agreementLevel,
@@ -642,7 +721,7 @@ export default function PerformanceAgreementCenter() {
                                                 e.preventDefault();
                                                 e.stopPropagation();
                                                 setEditing(null);
-                                                applyInheritanceToForm(emp.id, r.documentKey, r.year);
+                                                applyInheritanceToForm(emp.id, r.documentKey, r.year, firstAct.rktId, firstAct.id);
                                                 setShowPk(true);
                                               }}
                                             >
@@ -682,7 +761,7 @@ export default function PerformanceAgreementCenter() {
                                                 e.preventDefault();
                                                 e.stopPropagation();
                                                 setEditing(null);
-                                                applyInheritanceToForm(emp.id, r.documentKey, r.year);
+                                                applyInheritanceToForm(emp.id, r.documentKey, r.year, firstAct.rktId, firstAct.id);
                                                 setShowPk(true);
                                               }}
                                             >
@@ -714,7 +793,7 @@ export default function PerformanceAgreementCenter() {
                                                 e.preventDefault();
                                                 e.stopPropagation();
                                                 setEditing(null);
-                                                applyInheritanceToForm(emp.id, r.documentKey, r.year);
+                                                applyInheritanceToForm(emp.id, r.documentKey, r.year, firstAct.rktId, firstAct.id);
                                                 setShowPk(true);
                                               }}
                                             >
@@ -760,7 +839,7 @@ export default function PerformanceAgreementCenter() {
                                                           e.preventDefault();
                                                           e.stopPropagation();
                                                           setEditing(null);
-                                                          applyInheritanceToForm(emp.id, r.documentKey, r.year);
+                                                          applyInheritanceToForm(emp.id, r.documentKey, r.year, firstAct.rktId, firstAct.id);
                                                           setShowPk(true);
                                                         }}
                                                       >
@@ -1021,7 +1100,7 @@ export default function PerformanceAgreementCenter() {
                   <button
                     type="button"
                     style={{ fontSize: "8px", padding: "2px 8px", border: "1px solid #86efac", background: "#fff", borderRadius: "4px", color: "#15803d", cursor: "pointer", fontWeight: 600, flexShrink: 0 }}
-                    onClick={() => applyInheritanceToForm(form.employeeId, form._docKey, Number(form.year || year))}
+                    onClick={() => applyInheritanceToForm(form.employeeId, form._docKey, Number(form.year || year), form._targetRktId, form._targetActionId)}
                   >
                     Tarik Ulang
                   </button>
@@ -1034,7 +1113,7 @@ export default function PerformanceAgreementCenter() {
                     <button
                       type="button"
                       style={{ fontSize: "8px", padding: "2px 6px", background: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd", borderRadius: "3px", cursor: "pointer", fontWeight: 600 }}
-                      onClick={() => applyInheritanceToForm(form.employeeId, form._docKey, Number(form.year || year))}
+                      onClick={() => applyInheritanceToForm(form.employeeId, form._docKey, Number(form.year || year), form._targetRktId, form._targetActionId)}
                     >
                       ⚡ Tarik dari RKT & RAK
                     </button>
@@ -1043,7 +1122,7 @@ export default function PerformanceAgreementCenter() {
                     value={form.employeeId}
                     onChange={(e) => {
                       const nextEmpId = e.target.value;
-                      applyInheritanceToForm(nextEmpId, form._docKey, Number(form.year || year));
+                      applyInheritanceToForm(nextEmpId, form._docKey, Number(form.year || year), form._targetRktId, form._targetActionId);
                     }}
                   >
                     {data.employees.map((e: any) => (
