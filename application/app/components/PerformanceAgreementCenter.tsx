@@ -54,7 +54,7 @@ const previousMonev = (agreement: any, indicatorId: number, form: any) => {
 const blankRktIndicator = () => ({ indicator: "", target: "", unit: "" });
 const blankRktObjective = () => ({ objective: "", indicators: [blankRktIndicator()] });
 const blankRktProgram = () => ({ programActivity: "", objectives: [blankRktObjective()] });
-const blankActionForm = (rktId = "") => ({ id: undefined, rktId, title: "", description: "", responsibleUnit: "", picEmployeeId: "", deadline: "" });
+const blankActionForm = (rktId = "", picEmployeeId = "") => ({ id: undefined, rktId, title: "", description: "", responsibleUnit: "", picEmployeeId, deadline: "" });
 const clonePrograms = (progs: any[]) => (progs || []).map((p: any) => ({
   programActivity: p.programActivity || "",
   objectives: (p.objectives || []).map((o: any) => ({
@@ -181,11 +181,12 @@ export default function PerformanceAgreementCenter() {
   };
   const toggleRakInheritance = async (rktId: number, rak: any, targetEmployeeId: number, currentlyAssigned: boolean) => {
     const matchingActions = plans.plans?.flatMap((p: any) => p.actions || []).filter((a: any) => String(a.rktId) === String(rktId) && a.title === rak.title) || [];
-    let currentEmpIds = matchingActions.map((a: any) => a.picEmployeeId).filter(Boolean);
+    let currentEmpIds = matchingActions.map((a: any) => Number(a.picEmployeeId)).filter(Boolean);
+    const targetIdNum = Number(targetEmployeeId);
     if (currentlyAssigned) {
-      currentEmpIds = currentEmpIds.filter((id: number) => id !== targetEmployeeId);
+      currentEmpIds = currentEmpIds.filter((id: number) => id !== targetIdNum);
     } else {
-      currentEmpIds = [...new Set([...currentEmpIds, targetEmployeeId])];
+      currentEmpIds = [...new Set([...currentEmpIds, targetIdNum])];
     }
     await request("/api/work-plans", {
       kind: "sync-rak-inheritance",
@@ -199,11 +200,12 @@ export default function PerformanceAgreementCenter() {
   };
   const batchAssignRakGroup = async (rktId: number, rak: any, groupEmployeeIds: number[], assignAll: boolean) => {
     const matchingActions = plans.plans?.flatMap((p: any) => p.actions || []).filter((a: any) => String(a.rktId) === String(rktId) && a.title === rak.title) || [];
-    let currentEmpIds = matchingActions.map((a: any) => a.picEmployeeId).filter(Boolean);
+    let currentEmpIds = matchingActions.map((a: any) => Number(a.picEmployeeId)).filter(Boolean);
+    const groupNums = groupEmployeeIds.map((id: any) => Number(id));
     if (assignAll) {
-      currentEmpIds = [...new Set([...currentEmpIds, ...groupEmployeeIds])];
+      currentEmpIds = [...new Set([...currentEmpIds, ...groupNums])];
     } else {
-      currentEmpIds = currentEmpIds.filter((id: number) => !groupEmployeeIds.includes(id));
+      currentEmpIds = currentEmpIds.filter((id: number) => !groupNums.includes(id));
     }
     await request("/api/work-plans", {
       kind: "sync-rak-inheritance",
@@ -366,8 +368,8 @@ export default function PerformanceAgreementCenter() {
                       return distinctActionTitles.map((title: any, actIdx: number) => {
                         const sharedActions = indActions.filter((a: any) => a.title === title);
                         const firstAct = sharedActions[0];
-                        const assignedEmpIds = sharedActions.map((a: any) => a.picEmployeeId).filter(Boolean);
-                        const assignedEmployees = (plans.employees || []).filter((e: any) => assignedEmpIds.includes(e.id));
+                        const assignedEmpIds = sharedActions.map((a: any) => String(a.picEmployeeId)).filter(Boolean);
+                        const assignedEmployees = (plans.employees || []).filter((e: any) => assignedEmpIds.includes(String(e.id)));
                         const treeKey = `${r.documentKey}-${firstAct.rktId}-${title}`;
                         const isExpanded = Boolean(expandedRakTree[treeKey]);
 
@@ -436,7 +438,7 @@ export default function PerformanceAgreementCenter() {
                                   <div style={{ padding: "0.35rem 0.5rem", background: "#f8fafc", borderRadius: "5px", border: "1px solid #e2e8f0" }}>
                                     <div style={{ fontWeight: 700, color: "#166534", marginBottom: "0.25rem", fontSize: "9px" }}>● Lembaga / Ketua</div>
                                     {ketuaEmps.map((emp: any) => {
-                                      const isAssigned = assignedEmpIds.includes(emp.id);
+                                      const isAssigned = assignedEmpIds.includes(String(emp.id));
                                       return (
                                         <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginLeft: "0.75rem", marginTop: "2px", fontSize: "9px" }}>
                                           <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
@@ -452,13 +454,13 @@ export default function PerformanceAgreementCenter() {
                                       <span style={{ fontWeight: 700, color: "#1e40af", fontSize: "9px", display: "inline" }}>↳ Komisioner (Anggota)</span>
                                       <button
                                         style={{ fontSize: "8px", padding: "2px 6px", border: "1px solid #cbd5e1", borderRadius: "4px", background: "#fff", cursor: "pointer" }}
-                                        onClick={() => batchAssignRakGroup(Number(firstAct.rktId), firstAct, anggotaEmps.map((e: any) => e.id), !anggotaEmps.every((e: any) => assignedEmpIds.includes(e.id)))}
+                                        onClick={() => batchAssignRakGroup(Number(firstAct.rktId), firstAct, anggotaEmps.map((e: any) => e.id), !anggotaEmps.every((e: any) => assignedEmpIds.includes(String(e.id))))}
                                       >
-                                        {anggotaEmps.every((e: any) => assignedEmpIds.includes(e.id)) ? "Batal Semua Anggota" : "Pilih Semua Anggota"}
+                                        {anggotaEmps.every((e: any) => assignedEmpIds.includes(String(e.id))) ? "Batal Semua Anggota" : "Pilih Semua Anggota"}
                                       </button>
                                     </div>
                                     {anggotaEmps.map((emp: any) => {
-                                      const isAssigned = assignedEmpIds.includes(emp.id);
+                                      const isAssigned = assignedEmpIds.includes(String(emp.id));
                                       return (
                                         <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginLeft: "0.75rem", marginTop: "3px", fontSize: "9px" }}>
                                           <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
@@ -472,7 +474,7 @@ export default function PerformanceAgreementCenter() {
                                   <div style={{ padding: "0.35rem 0.5rem", background: "#f8fafc", borderRadius: "5px", border: "1px solid #e2e8f0" }}>
                                     <div style={{ fontWeight: 700, color: "#854d0e", marginBottom: "0.25rem", fontSize: "9px" }}>↳ Sekretariat (Sekretaris)</div>
                                     {sekretarisEmps.map((emp: any) => {
-                                      const isAssigned = assignedEmpIds.includes(emp.id);
+                                      const isAssigned = assignedEmpIds.includes(String(emp.id));
                                       return (
                                         <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginLeft: "0.75rem", marginTop: "3px", fontSize: "9px" }}>
                                           <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
@@ -485,7 +487,7 @@ export default function PerformanceAgreementCenter() {
                                     <div style={{ marginTop: "0.35rem", marginLeft: "0.75rem", display: "grid", gap: "0.35rem" }}>
                                       {subbagUnits.map((subbag: string) => {
                                         const subbagEmps = allEmps.filter((e: any) => (e.unit || "Lainnya") === subbag && e.position !== "Ketua" && e.position !== "Anggota" && e.position !== "Sekretaris");
-                                        const allChecked = subbagEmps.length > 0 && subbagEmps.every((e: any) => assignedEmpIds.includes(e.id));
+                                        const allChecked = subbagEmps.length > 0 && subbagEmps.every((e: any) => assignedEmpIds.includes(String(e.id)));
 
                                         return (
                                           <div key={subbag} style={{ background: "#ffffff", padding: "0.3rem 0.5rem", borderRadius: "5px", border: "1px solid #e2e8f0" }}>
@@ -500,7 +502,7 @@ export default function PerformanceAgreementCenter() {
                                             </div>
                                             <div style={{ marginLeft: "0.75rem", display: "grid", gap: "2px" }}>
                                               {subbagEmps.map((emp: any) => {
-                                                const isAssigned = assignedEmpIds.includes(emp.id);
+                                                const isAssigned = assignedEmpIds.includes(String(emp.id));
                                                 return (
                                                   <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginTop: "2px", fontSize: "9px" }}>
                                                     <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
@@ -524,7 +526,11 @@ export default function PerformanceAgreementCenter() {
                   </section>)}
                 </div>)}</div>
                 {plans.canManage && <div className="row-actions">
-                  <button className="secondary-action" onClick={() => { setActionForm(blankActionForm(r.rows[0]?.id || "")); setShowAction(true); }}>+ Rencana Aksi</button>
+                  <button className="secondary-action" onClick={() => {
+                    const defaultPicId = r.policyOwnerId || (r.rktType === "Sekretaris" ? plans.employees?.find((e: any) => e.position === "Sekretaris")?.id : plans.employees?.find((e: any) => e.position === "Ketua")?.id) || "";
+                    setActionForm(blankActionForm(r.rows[0]?.id || "", defaultPicId));
+                    setShowAction(true);
+                  }}>+ Rencana Aksi</button>
                   <button onClick={() => { setRktForm({ documentKey: r.documentKey, year: r.year, rktType: r.rktType, policyOwnerId: r.policyOwnerId || "", notes: r.notes || "", status: r.status, programs: r.programs }); setShowRkt(true); }}>Edit</button>
                   {data.canManageAll && <button className="danger" onClick={() => request(`/api/work-plans?documentKey=${encodeURIComponent(r.documentKey)}`, {}, "DELETE")}>Hapus</button>}
                 </div>}
@@ -1349,7 +1355,12 @@ export default function PerformanceAgreementCenter() {
             </div>
             <div className="modal-actions">
               <button onClick={() => setViewingActions(null)}>Tutup</button>
-              {plans.canManage && <button className="primary" onClick={() => { setActionForm({ rktId: viewingActions.rows[0]?.id || "", title: "", description: "", responsibleUnit: "", picEmployeeId: "", deadline: "" }); setShowAction(true); setViewingActions(null); }}>+ Rencana Aksi</button>}
+              {plans.canManage && <button className="primary" onClick={() => {
+                const defaultPicId = viewingActions.policyOwnerId || (viewingActions.rktType === "Sekretaris" ? plans.employees?.find((e: any) => e.position === "Sekretaris")?.id : plans.employees?.find((e: any) => e.position === "Ketua")?.id) || "";
+                setActionForm(blankActionForm(viewingActions.rows[0]?.id || "", defaultPicId));
+                setShowAction(true);
+                setViewingActions(null);
+              }}>+ Rencana Aksi</button>}
             </div>
           </div>
         </div>

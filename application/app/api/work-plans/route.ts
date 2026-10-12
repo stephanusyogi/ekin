@@ -65,21 +65,35 @@ export async function POST(request: Request) {
         .where(and(eq(actionPlans.rktId, targetRktId), eq(actionPlans.title, targetTitle)));
 
       const allStaff = await db.select().from(employees);
+      const unassignedAction = existing.find((a) => !a.picEmployeeId);
+      let unassignedClaimed = false;
 
       // Add actions for newly checked employees
       for (const empId of selectedEmpIds) {
         const alreadyHas = existing.some((a) => a.picEmployeeId === empId);
         if (!alreadyHas) {
           const emp = allStaff.find((e) => e.id === empId);
-          await db.insert(actionPlans).values({
-            rktId: targetRktId,
-            title: targetTitle,
-            description: (p.description || "").trim(),
-            responsibleUnit: emp?.unitSubsection || (p.responsibleUnit || "").trim(),
-            picEmployeeId: empId,
-            deadline: p.deadline || "",
-            createdBy: me.email,
-          });
+          if (unassignedAction && !unassignedClaimed) {
+            await db
+              .update(actionPlans)
+              .set({
+                picEmployeeId: empId,
+                responsibleUnit: emp?.unitSubsection || unassignedAction.responsibleUnit || "",
+                updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+              })
+              .where(eq(actionPlans.id, unassignedAction.id));
+            unassignedClaimed = true;
+          } else {
+            await db.insert(actionPlans).values({
+              rktId: targetRktId,
+              title: targetTitle,
+              description: (p.description || "").trim(),
+              responsibleUnit: emp?.unitSubsection || (p.responsibleUnit || "").trim(),
+              picEmployeeId: empId,
+              deadline: p.deadline || "",
+              createdBy: me.email,
+            });
+          }
         }
       }
 
