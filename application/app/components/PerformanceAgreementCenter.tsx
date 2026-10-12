@@ -79,6 +79,7 @@ export default function PerformanceAgreementCenter() {
     [showPk, setShowPk] = useState(false),
     [showRkt, setShowRkt] = useState(false),
     [showAction, setShowAction] = useState(false),
+    [selectedKetuaProgram, setSelectedKetuaProgram] = useState(""),
     [saving, setSaving] = useState(false),
     [toast, setToast] = useState(""),
     [filter, setFilter] = useState("Semua"),
@@ -167,6 +168,7 @@ export default function PerformanceAgreementCenter() {
       setShowPk(false);
       setShowRkt(false);
       setShowAction(false);
+      setSelectedKetuaProgram("");
       setActionForm(blankActionForm());
       setEditing(null);
       await load();
@@ -235,7 +237,7 @@ export default function PerformanceAgreementCenter() {
         </div>
         <div className="pk-head-actions">
           {plans.canManage && (
-            <button onClick={() => { setRktForm({ year, rktType: "Ketua", programs: [blankRktProgram()], policyOwnerId: plans.employees.find((e:any) => e.position === "Ketua")?.id || "", notes: "", status: "Aktif", documentKey: undefined }); setShowRkt(true); }}>+ RKT</button>
+            <button onClick={() => { setSelectedKetuaProgram(""); setRktForm({ year, rktType: "Ketua", programs: [blankRktProgram()], policyOwnerId: plans.employees.find((e:any) => e.position === "Ketua")?.id || "", notes: "", status: "Aktif", documentKey: undefined }); setShowRkt(true); }}>+ RKT</button>
           )}
           <button className="primary" onClick={() => setShowPk(true)}>
             + Buat PK
@@ -286,7 +288,7 @@ export default function PerformanceAgreementCenter() {
             <label>
               Jenis RKT
               <select value={rktFilter} onChange={(e) => setRktFilter(e.target.value)}>
-                {["Semua", "Ketua", "Sekretaris", "Kesekretariatan", "Instansi"].map((x) => <option key={x}>{x}</option>)}
+                {["Semua", "Ketua", "Sekretaris"].map((x) => <option key={x}>{x}</option>)}
               </select>
             </label>
           </div>
@@ -330,7 +332,6 @@ export default function PerformanceAgreementCenter() {
                 </div>)}</div>
                 {plans.canManage && <div className="row-actions">
                   <button className="secondary-action" onClick={() => { setActionForm(blankActionForm(r.rows[0]?.id || "")); setShowAction(true); }}>+ Rencana Aksi</button>
-                  <button onClick={() => { setRktForm({ documentKey: undefined, year: Number(r.year) + 1, rktType: r.rktType, policyOwnerId: r.policyOwnerId || "", notes: r.notes || "", status: "Aktif", programs: clonePrograms(r.programs) }); setShowRkt(true); }}>Salin RKT</button>
                   <button onClick={() => { setRktForm({ documentKey: r.documentKey, year: r.year, rktType: r.rktType, policyOwnerId: r.policyOwnerId || "", notes: r.notes || "", status: r.status, programs: r.programs }); setShowRkt(true); }}>Edit</button>
                   {data.canManageAll && <button className="danger" onClick={() => request(`/api/work-plans?documentKey=${encodeURIComponent(r.documentKey)}`, {}, "DELETE")}>Hapus</button>}
                 </div>}
@@ -808,36 +809,22 @@ export default function PerformanceAgreementCenter() {
             <span>RENCANA KERJA TAHUNAN</span>
             <h3>{rktForm.documentKey ? "Edit RKT" : "Tambah RKT"}</h3>
             <div className="module-form">
-              {!rktForm.documentKey && plans.documents?.length > 0 && (
-                <label>
-                  Gunakan Referensi RKT (Opsional)
-                  <select onChange={(e) => {
-                    if (!e.target.value) return;
-                    const refDoc = plans.documents.find((d: any) => d.documentKey === e.target.value);
-                    if (refDoc) {
-                      setRktForm((prev: any) => ({
-                        ...prev,
-                        documentKey: undefined,
-                        rktType: refDoc.rktType,
-                        programs: clonePrograms(refDoc.programs),
-                      }));
-                    }
-                    e.target.value = "";
-                  }}>
-                    <option value="">-- Pilih RKT Sebelumnya sebagai Template --</option>
-                    {plans.documents.map((d: any) => (
-                      <option key={d.documentKey} value={d.documentKey}>
-                        RKT {d.rktType} · {d.year} ({d.programs?.length || 0} Program)
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
               <label>
                 Jenis RKT
                 <select
                   value={rktForm.rktType}
-                  onChange={(e) => setRktForm({ ...rktForm, rktType: e.target.value })}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    setSelectedKetuaProgram("");
+                    setRktForm({
+                      ...rktForm,
+                      rktType: nextType,
+                      policyOwnerId: nextType === "Sekretaris"
+                        ? plans.employees.find((emp: any) => emp.position === "Sekretaris")?.id || rktForm.policyOwnerId
+                        : plans.employees.find((emp: any) => emp.position === "Ketua")?.id || rktForm.policyOwnerId,
+                      programs: nextType === "Sekretaris" ? [] : [blankRktProgram()],
+                    });
+                  }}
                 >
                   <option>Ketua</option><option>Sekretaris</option>
                 </select>
@@ -867,28 +854,157 @@ export default function PerformanceAgreementCenter() {
                   ))}
                 </select>
               </label>
-              <div className="rkt-builder">
-                <div className="rkt-builder-title"><b>Struktur RKT {rktForm.rktType}</b><button onClick={() => setRktForm({ ...rktForm, programs: [...rktForm.programs, blankRktProgram()] })}>+ Program/Kegiatan</button></div>
-                {rktForm.programs.map((program:any, programIndex:number) => <article key={programIndex}>
-                  <div className="pk-objective-head"><b>Program/Kegiatan {programIndex + 1}</b>{rktForm.programs.length > 1 && <button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.filter((_:any,n:number) => n !== programIndex) })}>Hapus Program</button>}</div>
-                  <label>Program/Kegiatan<input value={program.programActivity} onChange={(e) => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, programActivity: e.target.value } : p) })} /></label>
-                  <div className="pk-indicator-editor-head"><b>{rktForm.rktType === "Ketua" ? "Sasaran Strategis" : "Sasaran Program (Outcome) / Sasaran Kegiatan"}</b><button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: [...p.objectives, blankRktObjective()] } : p) })}>+ Sasaran</button></div>
-                  {program.objectives.map((objective:any, objectiveIndex:number) => <section key={objectiveIndex}>
-                    <div className="pk-objective-head"><strong>Sasaran {programIndex + 1}.{objectiveIndex + 1}</strong>{program.objectives.length > 1 && <button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.filter((_:any,k:number) => k !== objectiveIndex) } : p) })}>Hapus Sasaran</button>}</div>
-                    <label>{rktForm.rktType === "Ketua" ? "Sasaran Strategis" : "Sasaran Program (Outcome) / Sasaran Kegiatan"}<textarea rows={2} value={objective.objective} onChange={(e) => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, objective: e.target.value } : o) } : p) })} /></label>
-                    <div className="pk-indicator-editor-head"><b>Indikator</b><button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: [...o.indicators, blankRktIndicator()] } : o) } : p) })}>+ Indikator</button></div>
-                    {objective.indicators.map((indicator:any, indicatorIndex:number) => <div className="rkt-indicator-row" key={indicatorIndex}>
-                      <label>Indikator<input value={indicator.indicator} onChange={(e) => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: o.indicators.map((i:any,q:number) => q === indicatorIndex ? { ...i, indicator: e.target.value } : i) } : o) } : p) })} /></label>
-                      <label>Target<input value={indicator.target} onChange={(e) => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: o.indicators.map((i:any,q:number) => q === indicatorIndex ? { ...i, target: e.target.value } : i) } : o) } : p) })} /></label>
-                      <label>Satuan<input value={indicator.unit} onChange={(e) => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: o.indicators.map((i:any,q:number) => q === indicatorIndex ? { ...i, unit: e.target.value } : i) } : o) } : p) })} /></label>
-                      {objective.indicators.length > 1 && <button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: o.indicators.filter((_:any,q:number) => q !== indicatorIndex) } : o) } : p) })}>Hapus</button>}
-                    </div>)}
-                  </section>)}
-                </article>)}
-              </div>
+              {!rktForm.documentKey && rktForm.rktType === "Sekretaris" && (
+                <label>
+                  Program (dari RKT Ketua)
+                  <select
+                    value={selectedKetuaProgram}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedKetuaProgram(val);
+                      const ketuaPrograms = (plans.documents || [])
+                        .filter((d: any) => d.rktType === "Ketua" || d.scope === "Instansi")
+                        .flatMap((d: any) =>
+                          (d.programs || []).map((p: any, idx: number) => ({
+                            key: `${d.documentKey || d.year}-${idx}-${p.programActivity}`,
+                            docYear: d.year,
+                            ...p,
+                          }))
+                        );
+                      const found = ketuaPrograms.find((p: any) => p.key === val);
+                      if (found) {
+                        setRktForm((prev: any) => ({
+                          ...prev,
+                          programs: clonePrograms([found]),
+                        }));
+                      } else {
+                        setRktForm((prev: any) => ({
+                          ...prev,
+                          programs: [],
+                        }));
+                      }
+                    }}
+                  >
+                    <option value="">-- Pilih Program RKT Ketua --</option>
+                    {(plans.documents || [])
+                      .filter((d: any) => d.rktType === "Ketua" || d.scope === "Instansi")
+                      .flatMap((d: any) =>
+                        (d.programs || []).map((p: any, idx: number) => ({
+                          key: `${d.documentKey || d.year}-${idx}-${p.programActivity}`,
+                          docYear: d.year,
+                          ...p,
+                        }))
+                      )
+                      .map((p: any) => (
+                        <option key={p.key} value={p.key}>
+                          {p.docYear ? `[${p.docYear}] ` : ""}{p.programActivity} ({p.objectives?.length || 0} Sasaran)
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              )}
+              {(() => {
+                const isSekretarisFromKetua = !rktForm.documentKey && rktForm.rktType === "Sekretaris";
+                if (isSekretarisFromKetua && !selectedKetuaProgram) {
+                  return (
+                    <div className="rkt-builder">
+                      <div className="rkt-builder-title">
+                        <b>Struktur RKT {rktForm.rktType}</b>
+                      </div>
+                      <p style={{ color: "#64748b", margin: "1rem 0", fontStyle: "italic" }}>
+                        Silakan pilih Program dari RKT Ketua pada dropdown di atas untuk memuat struktur sasaran dan indikator.
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="rkt-builder">
+                    <div className="rkt-builder-title">
+                      <b>Struktur RKT {rktForm.rktType} {isSekretarisFromKetua ? "(Hanya Lihat - Mengikuti RKT Ketua)" : ""}</b>
+                      {!isSekretarisFromKetua && (
+                        <button onClick={() => setRktForm({ ...rktForm, programs: [...rktForm.programs, blankRktProgram()] })}>+ Program/Kegiatan</button>
+                      )}
+                    </div>
+                    {rktForm.programs.map((program:any, programIndex:number) => <article key={programIndex}>
+                      <div className="pk-objective-head">
+                        <b>Program/Kegiatan {programIndex + 1}</b>
+                        {!isSekretarisFromKetua && rktForm.programs.length > 1 && (
+                          <button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.filter((_:any,n:number) => n !== programIndex) })}>Hapus Program</button>
+                        )}
+                      </div>
+                      <label>Program/Kegiatan
+                        <input
+                          value={program.programActivity}
+                          readOnly={isSekretarisFromKetua}
+                          style={isSekretarisFromKetua ? { background: "#f8fafc", cursor: "not-allowed" } : undefined}
+                          onChange={(e) => !isSekretarisFromKetua && setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, programActivity: e.target.value } : p) })}
+                        />
+                      </label>
+                      <div className="pk-indicator-editor-head">
+                        <b>{rktForm.rktType === "Ketua" ? "Sasaran Strategis" : "Sasaran Program (Outcome) / Sasaran Kegiatan"}</b>
+                        {!isSekretarisFromKetua && (
+                          <button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: [...p.objectives, blankRktObjective()] } : p) })}>+ Sasaran</button>
+                        )}
+                      </div>
+                      {program.objectives.map((objective:any, objectiveIndex:number) => <section key={objectiveIndex}>
+                        <div className="pk-objective-head">
+                          <strong>Sasaran {programIndex + 1}.{objectiveIndex + 1}</strong>
+                          {!isSekretarisFromKetua && program.objectives.length > 1 && (
+                            <button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.filter((_:any,k:number) => k !== objectiveIndex) } : p) })}>Hapus Sasaran</button>
+                          )}
+                        </div>
+                        <label>{rktForm.rktType === "Ketua" ? "Sasaran Strategis" : "Sasaran Program (Outcome) / Sasaran Kegiatan"}
+                          <textarea
+                            rows={2}
+                            value={objective.objective}
+                            readOnly={isSekretarisFromKetua}
+                            style={isSekretarisFromKetua ? { background: "#f8fafc", cursor: "not-allowed" } : undefined}
+                            onChange={(e) => !isSekretarisFromKetua && setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, objective: e.target.value } : o) } : p) })}
+                          />
+                        </label>
+                        <div className="pk-indicator-editor-head">
+                          <b>Indikator</b>
+                          {!isSekretarisFromKetua && (
+                            <button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: [...o.indicators, blankRktIndicator()] } : o) } : p) })}>+ Indikator</button>
+                          )}
+                        </div>
+                        {objective.indicators.map((indicator:any, indicatorIndex:number) => <div className="rkt-indicator-row" key={indicatorIndex}>
+                          <label>Indikator
+                            <input
+                              value={indicator.indicator}
+                              readOnly={isSekretarisFromKetua}
+                              style={isSekretarisFromKetua ? { background: "#f8fafc", cursor: "not-allowed" } : undefined}
+                              onChange={(e) => !isSekretarisFromKetua && setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: o.indicators.map((i:any,q:number) => q === indicatorIndex ? { ...i, indicator: e.target.value } : i) } : o) } : p) })}
+                            />
+                          </label>
+                          <label>Target
+                            <input
+                              value={indicator.target}
+                              readOnly={isSekretarisFromKetua}
+                              style={isSekretarisFromKetua ? { background: "#f8fafc", cursor: "not-allowed" } : undefined}
+                              onChange={(e) => !isSekretarisFromKetua && setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: o.indicators.map((i:any,q:number) => q === indicatorIndex ? { ...i, target: e.target.value } : i) } : o) } : p) })}
+                            />
+                          </label>
+                          <label>Satuan
+                            <input
+                              value={indicator.unit}
+                              readOnly={isSekretarisFromKetua}
+                              style={isSekretarisFromKetua ? { background: "#f8fafc", cursor: "not-allowed" } : undefined}
+                              onChange={(e) => !isSekretarisFromKetua && setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: o.indicators.map((i:any,q:number) => q === indicatorIndex ? { ...i, unit: e.target.value } : i) } : o) } : p) })}
+                            />
+                          </label>
+                          {!isSekretarisFromKetua && objective.indicators.length > 1 && (
+                            <button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, objectives: p.objectives.map((o:any,k:number) => k === objectiveIndex ? { ...o, indicators: o.indicators.filter((_:any,q:number) => q !== indicatorIndex) } : o) } : p) })}>Hapus</button>
+                          )}
+                        </div>)}
+                      </section>)}
+                    </article>)}
+                  </div>
+                );
+              })()}
             </div>
             <div className="modal-actions">
-              <button onClick={() => { setShowRkt(false); setRktForm({ year, rktType: "Ketua", programs: [blankRktProgram()], policyOwnerId: "", notes: "", status: "Aktif", documentKey: undefined }); }}>Batal</button>
+              <button onClick={() => { setShowRkt(false); setSelectedKetuaProgram(""); setRktForm({ year, rktType: "Ketua", programs: [blankRktProgram()], policyOwnerId: "", notes: "", status: "Aktif", documentKey: undefined }); }}>Batal</button>
               <button
                 className="primary"
                 onClick={() => rktForm.documentKey
