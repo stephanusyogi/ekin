@@ -53,10 +53,11 @@ const previousMonev = (agreement: any, indicatorId: number, form: any) => {
 };
 const blankRktIndicator = () => ({ indicator: "", target: "", unit: "" });
 const blankRktObjective = () => ({ objective: "", indicators: [blankRktIndicator()] });
-const blankRktProgram = () => ({ programActivity: "", objectives: [blankRktObjective()] });
+const blankRktProgram = () => ({ programActivity: "", budgetAmount: 0, objectives: [blankRktObjective()] });
 const blankActionForm = (rktId = "", picEmployeeId = "") => ({ id: undefined, rktId, title: "", description: "", responsibleUnit: "", picEmployeeId, deadline: "" });
 const clonePrograms = (progs: any[]) => (progs || []).map((p: any) => ({
   programActivity: p.programActivity || "",
+  budgetAmount: Number(p.budgetAmount || 0),
   objectives: (p.objectives || []).map((o: any) => ({
     objective: o.objective || "",
     indicators: (o.indicators || []).map((i: any) => ({
@@ -279,6 +280,7 @@ export default function PerformanceAgreementCenter() {
         };
 
         const progName = targetRow.programActivity || targetRow.objective || "Program KPU";
+        const progBudget = Number(targetRow.budgetAmount || 0);
         const generatedObjectives = [{
           objective: objName,
           objectiveType: level === "Staf" ? "Sasaran Kegiatan" : "Sasaran Program (Outcome)",
@@ -289,7 +291,7 @@ export default function PerformanceAgreementCenter() {
         const generatedBudgets = [{
           programName: progName,
           outputDescription: targetAction?.title || (level === "Staf" ? (targetRow.indicator || "") : ""),
-          amount: 0,
+          amount: progBudget,
         }];
 
         const docYear = targetRow.year || targetYear || effectiveYear;
@@ -399,11 +401,14 @@ export default function PerformanceAgreementCenter() {
     ]));
 
     const generatedBudgets = distinctPrograms.length > 0
-      ? distinctPrograms.map((pName: any) => ({
-          programName: pName,
-          outputDescription: level === "Staf" ? (linkedActions[0]?.title || "") : "",
-          amount: 0,
-        }))
+      ? distinctPrograms.map((pName: any) => {
+          const matchingRow = candidateRows.find((r: any) => (r.programActivity || r.objective) === pName && Number(r.budgetAmount) > 0);
+          return {
+            programName: pName,
+            outputDescription: level === "Staf" ? (linkedActions[0]?.title || "") : "",
+            amount: Number(matchingRow?.budgetAmount || 0),
+          };
+        })
       : [blankBudget()];
 
     const firstRkt = linkedRktRows[0];
@@ -606,7 +611,14 @@ export default function PerformanceAgreementCenter() {
                   </span>
                 </div>
                 <div className="rkt-hierarchy">{r.programs.map((p:any, pn:number) => <div key={pn}>
-                  <b>{pn + 1}. {p.programActivity}</b>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px", flexWrap: "wrap", gap: "6px" }}>
+                    <b>{pn + 1}. {p.programActivity}</b>
+                    {Number(p.budgetAmount) > 0 && (
+                      <span style={{ fontSize: "9px", background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0", padding: "1px 8px", borderRadius: "10px", fontWeight: 700 }}>
+                        Pagu: {rupiah(Number(p.budgetAmount))}
+                      </span>
+                    )}
+                  </div>
                   {p.objectives.map((o:any, on:number) => <section key={on}><strong>{pn + 1}.{on + 1} {o.objective}</strong>
                     {o.indicators.map((i:any, ix:number) => {
                       const indActions = r.actions.filter((a: any) => String(a.rktId) === String(i.id));
@@ -1484,14 +1496,29 @@ export default function PerformanceAgreementCenter() {
                           <button onClick={() => setRktForm({ ...rktForm, programs: rktForm.programs.filter((_:any,n:number) => n !== programIndex) })}>Hapus Program</button>
                         )}
                       </div>
-                      <label>Program/Kegiatan
-                        <input
-                          value={program.programActivity}
-                          readOnly={isSekretarisFromKetua}
-                          style={isSekretarisFromKetua ? { background: "#f8fafc", cursor: "not-allowed" } : undefined}
-                          onChange={(e) => !isSekretarisFromKetua && setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, programActivity: e.target.value } : p) })}
-                        />
-                      </label>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: "10px", alignItems: "start" }}>
+                        <label>Program/Kegiatan
+                          <input
+                            value={program.programActivity}
+                            readOnly={isSekretarisFromKetua}
+                            style={isSekretarisFromKetua ? { background: "#f8fafc", cursor: "not-allowed" } : undefined}
+                            onChange={(e) => !isSekretarisFromKetua && setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, programActivity: e.target.value } : p) })}
+                          />
+                        </label>
+                        <label>Pagu Anggaran Program (Rp)
+                          <input
+                            type="number"
+                            min={0}
+                            value={program.budgetAmount ?? 0}
+                            readOnly={isSekretarisFromKetua}
+                            style={isSekretarisFromKetua ? { background: "#f8fafc", cursor: "not-allowed" } : undefined}
+                            onChange={(e) => !isSekretarisFromKetua && setRktForm({ ...rktForm, programs: rktForm.programs.map((p:any,n:number) => n === programIndex ? { ...p, budgetAmount: Math.max(0, Number(e.target.value) || 0) } : p) })}
+                          />
+                          <span style={{ fontSize: "10px", color: "#047857", fontWeight: 600, display: "block", marginTop: "2px" }}>
+                            {rupiah(Number(program.budgetAmount) || 0)}
+                          </span>
+                        </label>
+                      </div>
                       <div className="pk-indicator-editor-head">
                         <b>{rktForm.rktType === "Ketua" ? "Sasaran Strategis" : "Sasaran Program (Outcome) / Sasaran Kegiatan"}</b>
                         {!isSekretarisFromKetua && (

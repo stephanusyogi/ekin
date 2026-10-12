@@ -532,6 +532,7 @@ export const annualWorkPlans = mysqlTable("annual_work_plans", {
   indicator: text("indicator").notNull(),
   target: varchar("target", { length: 255 }).notNull(),
   unit: varchar("unit", { length: 255 }).notNull().default("Persen"),
+  budgetAmount: bigint("budget_amount", { mode: "number" }).notNull().default(0),
   policyOwnerId: bigint("policy_owner_id", { mode: "number" }),
   notes: text("notes").notNull(),
   status: varchar("status", { length: 30 })

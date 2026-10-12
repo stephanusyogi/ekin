@@ -8,9 +8,16 @@ const managers = ["super_user", "super_admin", "admin"];
 const flattenPrograms = (p: any) => (Array.isArray(p.programs) ? p.programs : []).flatMap((program: any, programOrder: number) =>
   (Array.isArray(program.objectives) ? program.objectives : []).flatMap((objective: any, objectiveOrder: number) =>
     (Array.isArray(objective.indicators) ? objective.indicators : []).map((indicator: any, indicatorOrder: number) => ({
-      id: indicator.id ? Number(indicator.id) : null, programActivity: (program.programActivity || "").trim(),
-      strategicObjective: (objective.objective || "").trim(), indicator: (indicator.indicator || "").trim(),
-      target: (indicator.target || "").trim(), unit: (indicator.unit || "").trim(), programOrder, objectiveOrder, indicatorOrder,
+      id: indicator.id ? Number(indicator.id) : null,
+      programActivity: (program.programActivity || "").trim(),
+      budgetAmount: Number(program.budgetAmount || 0),
+      strategicObjective: (objective.objective || "").trim(),
+      indicator: (indicator.indicator || "").trim(),
+      target: (indicator.target || "").trim(),
+      unit: (indicator.unit || "").trim(),
+      programOrder,
+      objectiveOrder,
+      indicatorOrder,
     })),
   ),
 );
@@ -34,10 +41,11 @@ export async function GET(request: Request) {
       if (!grouped.has(key)) grouped.set(key, { documentKey: key, year: row.year, rktType: row.rktType || (row.scope === "Kesekretariatan" ? "Sekretaris" : "Ketua"), scope: row.scope, policyOwnerId: row.policyOwnerId, status: row.status, notes: row.notes, programs: [], rows: [] });
       const doc = grouped.get(key); doc.rows.push(row);
       let program = doc.programs.find((x: any) => x.order === row.programOrder && x.programActivity === (row.programActivity || row.objective));
-      if (!program) { program = { order: row.programOrder, programActivity: row.programActivity || row.objective, objectives: [] }; doc.programs.push(program); }
+      if (!program) { program = { order: row.programOrder, programActivity: row.programActivity || row.objective, budgetAmount: Number(row.budgetAmount || 0), objectives: [] }; doc.programs.push(program); }
+      else if (!program.budgetAmount && row.budgetAmount) { program.budgetAmount = Number(row.budgetAmount); }
       let objective = program.objectives.find((x: any) => x.order === row.objectiveOrder && x.objective === (row.strategicObjective || row.objective));
       if (!objective) { objective = { order: row.objectiveOrder, objective: row.strategicObjective || row.objective, indicators: [] }; program.objectives.push(objective); }
-      objective.indicators.push({ id: row.id, indicator: row.indicator, target: row.target, unit: row.unit, order: row.indicatorOrder });
+      objective.indicators.push({ id: row.id, indicator: row.indicator, target: row.target, unit: row.unit, budgetAmount: Number(row.budgetAmount || 0), order: row.indicatorOrder });
     }
     return Response.json({ canManage, employees: staff.map((e) => ({ id: e.id, fullName: e.fullName, position: e.position, unit: e.unitSubsection })),
       plans: plans.map((r) => ({ ...r, owner: staff.find((e) => e.id === r.policyOwnerId), actions: actions.filter((a) => a.rktId === r.id).map((a) => ({ ...a, pic: staff.find((e) => e.id === a.picEmployeeId) })) })),
@@ -136,7 +144,7 @@ export async function POST(request: Request) {
     if (!p.year || !rows.length) return Response.json({ error: "Minimal satu Program, Sasaran, Indikator, dan Target wajib diisi" }, { status: 400 });
     const documentKey = crypto.randomUUID(), rktType = p.rktType === "Sekretaris" ? "Sekretaris" : "Ketua", inserted = [];
     for (const row of rows) {
-      const [res] = await db.insert(annualWorkPlans).values({ documentKey, rktType, year: Number(p.year), scope: rktType === "Sekretaris" ? "Kesekretariatan" : "Instansi", programActivity: row.programActivity, strategicObjective: row.strategicObjective, objective: row.strategicObjective, indicator: row.indicator, target: row.target, unit: row.unit, programOrder: row.programOrder, objectiveOrder: row.objectiveOrder, indicatorOrder: row.indicatorOrder, policyOwnerId: p.policyOwnerId ? Number(p.policyOwnerId) : self?.id || null, notes: (p.notes || "").trim(), status: p.status === "Draft" ? "Draft" : "Aktif", createdBy: me.email });
+      const [res] = await db.insert(annualWorkPlans).values({ documentKey, rktType, year: Number(p.year), scope: rktType === "Sekretaris" ? "Kesekretariatan" : "Instansi", programActivity: row.programActivity, strategicObjective: row.strategicObjective, objective: row.strategicObjective, indicator: row.indicator, target: row.target, unit: row.unit, budgetAmount: row.budgetAmount || 0, programOrder: row.programOrder, objectiveOrder: row.objectiveOrder, indicatorOrder: row.indicatorOrder, policyOwnerId: p.policyOwnerId ? Number(p.policyOwnerId) : self?.id || null, notes: (p.notes || "").trim(), status: p.status === "Draft" ? "Draft" : "Aktif", createdBy: me.email });
       const [created] = await db.select().from(annualWorkPlans).where(eq(annualWorkPlans.id, res.insertId)).limit(1);
       inserted.push(created);
     }
@@ -173,7 +181,7 @@ export async function PATCH(request: Request) {
     }
     const rktType = p.rktType === "Sekretaris" ? "Sekretaris" : "Ketua";
     for (const row of rows) {
-      const values = { rktType, year: Number(p.year), scope: rktType === "Sekretaris" ? "Kesekretariatan" as const : "Instansi" as const, programActivity: row.programActivity, strategicObjective: row.strategicObjective, objective: row.strategicObjective, indicator: row.indicator, target: row.target, unit: row.unit, programOrder: row.programOrder, objectiveOrder: row.objectiveOrder, indicatorOrder: row.indicatorOrder, policyOwnerId: p.policyOwnerId ? Number(p.policyOwnerId) : null, notes: (p.notes || "").trim(), status: p.status === "Draft" ? "Draft" as const : "Aktif" as const, updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') };
+      const values = { rktType, year: Number(p.year), scope: rktType === "Sekretaris" ? "Kesekretariatan" as const : "Instansi" as const, programActivity: row.programActivity, budgetAmount: row.budgetAmount || 0, strategicObjective: row.strategicObjective, objective: row.strategicObjective, indicator: row.indicator, target: row.target, unit: row.unit, programOrder: row.programOrder, objectiveOrder: row.objectiveOrder, indicatorOrder: row.indicatorOrder, policyOwnerId: p.policyOwnerId ? Number(p.policyOwnerId) : null, notes: (p.notes || "").trim(), status: p.status === "Draft" ? "Draft" as const : "Aktif" as const, updatedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') };
       if (row.id) await db.update(annualWorkPlans).set(values).where(eq(annualWorkPlans.id, row.id));
       else await db.insert(annualWorkPlans).values({ ...values, documentKey: p.documentKey, createdBy: me.email });
     }
