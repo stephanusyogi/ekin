@@ -79,6 +79,7 @@ export default function PerformanceAgreementCenter() {
     [showPk, setShowPk] = useState(false),
     [showRkt, setShowRkt] = useState(false),
     [showAction, setShowAction] = useState(false),
+    [expandedRakTree, setExpandedRakTree] = useState<Record<string, boolean>>({}),
     [selectedKetuaProgram, setSelectedKetuaProgram] = useState(""),
     [saving, setSaving] = useState(false),
     [toast, setToast] = useState(""),
@@ -177,6 +178,42 @@ export default function PerformanceAgreementCenter() {
     } finally {
       setSaving(false);
     }
+  };
+  const toggleRakInheritance = async (rktId: number, rak: any, targetEmployeeId: number, currentlyAssigned: boolean) => {
+    const matchingActions = plans.plans?.flatMap((p: any) => p.actions || []).filter((a: any) => String(a.rktId) === String(rktId) && a.title === rak.title) || [];
+    let currentEmpIds = matchingActions.map((a: any) => a.picEmployeeId).filter(Boolean);
+    if (currentlyAssigned) {
+      currentEmpIds = currentEmpIds.filter((id: number) => id !== targetEmployeeId);
+    } else {
+      currentEmpIds = [...new Set([...currentEmpIds, targetEmployeeId])];
+    }
+    await request("/api/work-plans", {
+      kind: "sync-rak-inheritance",
+      rktId,
+      title: rak.title,
+      description: rak.description || "",
+      deadline: rak.deadline || "",
+      responsibleUnit: rak.responsibleUnit || "",
+      employeeIds: currentEmpIds,
+    });
+  };
+  const batchAssignRakGroup = async (rktId: number, rak: any, groupEmployeeIds: number[], assignAll: boolean) => {
+    const matchingActions = plans.plans?.flatMap((p: any) => p.actions || []).filter((a: any) => String(a.rktId) === String(rktId) && a.title === rak.title) || [];
+    let currentEmpIds = matchingActions.map((a: any) => a.picEmployeeId).filter(Boolean);
+    if (assignAll) {
+      currentEmpIds = [...new Set([...currentEmpIds, ...groupEmployeeIds])];
+    } else {
+      currentEmpIds = currentEmpIds.filter((id: number) => !groupEmployeeIds.includes(id));
+    }
+    await request("/api/work-plans", {
+      kind: "sync-rak-inheritance",
+      rktId,
+      title: rak.title,
+      description: rak.description || "",
+      deadline: rak.deadline || "",
+      responsibleUnit: rak.responsibleUnit || "",
+      employeeIds: currentEmpIds,
+    });
   };
   const setObjective = (objectiveIndex: number, key: string, value: any) =>
       setForm({ ...form, objectives: form.objectives.map((x: any, n: number) => n === objectiveIndex ? { ...x, [key]: value } : x) }),
@@ -321,13 +358,159 @@ export default function PerformanceAgreementCenter() {
                   <b>{pn + 1}. {p.programActivity}</b>
                   {p.objectives.map((o:any, on:number) => <section key={on}><strong>{pn + 1}.{on + 1} {o.objective}</strong>
                     {o.indicators.map((i:any, ix:number) => <span key={i.id}>{pn + 1}.{on + 1}.{ix + 1} {i.indicator} · Target {i.target} {i.unit}</span>)}
-                    {r.actions.filter((a:any) => o.indicators.some((i:any) => String(i.id) === String(a.rktId))).map((a:any) => (
-                       <div key={a.id} style={{marginLeft: "1rem", padding: "0.5rem 0.75rem", background: "#f8fafc", borderLeft: "3px solid #3b82f6", marginTop: "0.5rem"}}>
-                          <span><b>RAK:</b> {a.title} (Batas Waktu: {a.deadline || "—"})</span>
-                          <span style={{color: "#64748b", display: "block", marginTop: "0.25rem"}}>PIC: {plans.employees?.find((e:any) => e.id === a.picEmployeeId)?.fullName || "Belum ditentukan"} - {a.description}</span>
-                          {plans.canManage && <div className="row-actions" style={{marginTop: "0.5rem", justifyContent: "flex-start"}}><button onClick={() => { setActionForm({ ...a, rktId: a.rktId }); setShowAction(true); }}>Edit</button><button className="danger" onClick={() => { if(confirm("Yakin ingin menghapus rencana aksi ini?")) request(`/api/work-plans?actionId=${a.id}`, {}, "DELETE"); }}>Hapus</button></div>}
-                       </div>
-                    ))}
+                    {(() => {
+                      const indIds = o.indicators.map((i: any) => String(i.id));
+                      const indActions = r.actions.filter((a: any) => indIds.includes(String(a.rktId)));
+                      const distinctActionTitles = Array.from(new Set(indActions.map((a: any) => a.title)));
+
+                      return distinctActionTitles.map((title: any, actIdx: number) => {
+                        const sharedActions = indActions.filter((a: any) => a.title === title);
+                        const firstAct = sharedActions[0];
+                        const assignedEmpIds = sharedActions.map((a: any) => a.picEmployeeId).filter(Boolean);
+                        const assignedEmployees = (plans.employees || []).filter((e: any) => assignedEmpIds.includes(e.id));
+                        const treeKey = `${r.documentKey}-${firstAct.rktId}-${title}`;
+                        const isExpanded = Boolean(expandedRakTree[treeKey]);
+
+                        // Group employees into organization hierarchy
+                        const allEmps = plans.employees || [];
+                        const ketuaEmps = allEmps.filter((e: any) => e.position === "Ketua");
+                        const anggotaEmps = allEmps.filter((e: any) => e.position === "Anggota");
+                        const sekretarisEmps = allEmps.filter((e: any) => e.position === "Sekretaris");
+                        const subbagUnits = Array.from(new Set(allEmps.filter((e: any) => e.position !== "Ketua" && e.position !== "Anggota" && e.position !== "Sekretaris").map((e: any) => e.unit || "Lainnya"))).sort();
+
+                        return (
+                          <div key={actIdx} style={{ marginLeft: "1rem", padding: "0.65rem 0.85rem", background: "#f8fafc", borderLeft: "4px solid #3b82f6", marginTop: "0.6rem", borderRadius: "0 8px 8px 0" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", flexWrap: "wrap" }}>
+                              <div>
+                                <span style={{ fontSize: "0.95rem" }}><b>RAK:</b> {firstAct.title} <span style={{ fontSize: "0.85rem", color: "#64748b" }}>(Batas Waktu: {firstAct.deadline || "—"})</span></span>
+                                {firstAct.description && <span style={{ color: "#64748b", display: "block", fontSize: "0.85rem", marginTop: "0.15rem" }}>{firstAct.description}</span>}
+                              </div>
+                              <span style={{ fontSize: "0.8rem", background: assignedEmployees.length ? "#e0f2fe" : "#f1f5f9", color: assignedEmployees.length ? "#0369a1" : "#64748b", padding: "2px 8px", borderRadius: "12px", fontWeight: 600 }}>
+                                {assignedEmployees.length} PIC Terdistribusi
+                              </span>
+                            </div>
+
+                            <div style={{ marginTop: "0.4rem", fontSize: "0.85rem", color: "#475569" }}>
+                              <b>PIC Aktif:</b> {assignedEmployees.length ? assignedEmployees.map((e: any) => `${e.fullName} (${e.position}${e.unit ? ` - ${e.unit}` : ""})`).join(", ") : <span style={{ color: "#94a3b8" }}>Belum ada PIC ditugaskan</span>}
+                            </div>
+
+                            {plans.canManage && (
+                              <div className="row-actions" style={{ marginTop: "0.5rem", justifyContent: "flex-start", alignItems: "center", gap: "8px" }}>
+                                <button
+                                  style={{ background: isExpanded ? "#1e293b" : "#fff", color: isExpanded ? "#fff" : "#168765", borderColor: isExpanded ? "#1e293b" : "#cfe0da", fontWeight: 600 }}
+                                  onClick={() => setExpandedRakTree((prev) => ({ ...prev, [treeKey]: !prev[treeKey] }))}
+                                >
+                                  {isExpanded ? "▲ Tutup Inheritance PIC" : `▼ Inheritance ke Hirarki Organisasi (${assignedEmployees.length})`}
+                                </button>
+                                <button onClick={() => { setActionForm({ ...firstAct, rktId: firstAct.rktId }); setShowAction(true); }}>Edit</button>
+                                <button className="danger" onClick={() => {
+                                  if (confirm(`Hapus seluruh rencana aksi "${title}" (${sharedActions.length} data)?`)) {
+                                    Promise.all(sharedActions.map((a: any) => request(`/api/work-plans?actionId=${a.id}`, {}, "DELETE")));
+                                  }
+                                }}>Hapus</button>
+                              </div>
+                            )}
+
+                            {/* Organization Tree Section */}
+                            {isExpanded && plans.canManage && (
+                              <div style={{ marginTop: "0.85rem", padding: "0.85rem", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "8px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", borderBottom: "1px solid #e2e8f0", paddingBottom: "0.5rem" }}>
+                                  <div>
+                                    <b style={{ fontSize: "0.9rem", color: "#0f172a" }}>Struktur Organisasi (Checklist Inheritance)</b>
+                                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>Centang pegawai yang mewarisi RAK & elemen sasaran ini. Perubahan langsung tersinkronisasi otomatis.</p>
+                                  </div>
+                                </div>
+
+                                <div style={{ display: "grid", gap: "0.5rem", fontSize: "0.85rem" }}>
+                                  {/* Lembaga / Ketua */}
+                                  <div style={{ padding: "0.4rem 0.6rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                                    <div style={{ fontWeight: 700, color: "#166534", marginBottom: "0.3rem" }}>● Lembaga / Ketua</div>
+                                    {ketuaEmps.map((emp: any) => {
+                                      const isAssigned = assignedEmpIds.includes(emp.id);
+                                      return (
+                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginLeft: "1rem", marginTop: "2px" }}>
+                                          <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
+                                          <span><b>{emp.fullName}</b> <span style={{ color: "#64748b" }}>({emp.position})</span></span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {/* Komisioner / Anggota */}
+                                  <div style={{ padding: "0.4rem 0.6rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                                      <span style={{ fontWeight: 700, color: "#1e40af" }}>↳ Komisioner (Anggota)</span>
+                                      <button
+                                        style={{ fontSize: "0.75rem", padding: "1px 6px" }}
+                                        onClick={() => batchAssignRakGroup(Number(firstAct.rktId), firstAct, anggotaEmps.map((e: any) => e.id), !anggotaEmps.every((e: any) => assignedEmpIds.includes(e.id)))}
+                                      >
+                                        {anggotaEmps.every((e: any) => assignedEmpIds.includes(e.id)) ? "Batal Semua Anggota" : "Pilih Semua Anggota"}
+                                      </button>
+                                    </div>
+                                    {anggotaEmps.map((emp: any) => {
+                                      const isAssigned = assignedEmpIds.includes(emp.id);
+                                      return (
+                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginLeft: "1rem", marginTop: "4px" }}>
+                                          <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
+                                          <span><b>{emp.fullName}</b> <span style={{ color: "#64748b" }}>({emp.position})</span></span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+
+                                  {/* Sekretariat / Sekretaris */}
+                                  <div style={{ padding: "0.4rem 0.6rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                                    <div style={{ fontWeight: 700, color: "#854d0e", marginBottom: "0.3rem" }}>↳ Sekretariat (Sekretaris)</div>
+                                    {sekretarisEmps.map((emp: any) => {
+                                      const isAssigned = assignedEmpIds.includes(emp.id);
+                                      return (
+                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginLeft: "1rem", marginTop: "4px" }}>
+                                          <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
+                                          <span><b>{emp.fullName}</b> <span style={{ color: "#64748b" }}>({emp.position})</span></span>
+                                        </label>
+                                      );
+                                    })}
+
+                                    {/* Subbagian-subbagian di bawah Sekretariat */}
+                                    <div style={{ marginTop: "0.5rem", marginLeft: "1rem", display: "grid", gap: "0.4rem" }}>
+                                      {subbagUnits.map((subbag: string) => {
+                                        const subbagEmps = allEmps.filter((e: any) => (e.unit || "Lainnya") === subbag && e.position !== "Ketua" && e.position !== "Anggota" && e.position !== "Sekretaris");
+                                        const allChecked = subbagEmps.length > 0 && subbagEmps.every((e: any) => assignedEmpIds.includes(e.id));
+
+                                        return (
+                                          <div key={subbag} style={{ background: "#ffffff", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
+                                              <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.85rem" }}>↳ {subbag}</span>
+                                              <button
+                                                style={{ fontSize: "0.75rem", padding: "1px 6px" }}
+                                                onClick={() => batchAssignRakGroup(Number(firstAct.rktId), firstAct, subbagEmps.map((e: any) => e.id), !allChecked)}
+                                              >
+                                                {allChecked ? `Batal Semua ${subbag}` : `Pilih Semua ${subbag}`}
+                                              </button>
+                                            </div>
+                                            <div style={{ marginLeft: "1rem", display: "grid", gap: "2px" }}>
+                                              {subbagEmps.map((emp: any) => {
+                                                const isAssigned = assignedEmpIds.includes(emp.id);
+                                                return (
+                                                  <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginTop: "2px" }}>
+                                                    <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
+                                                    <span><b>{emp.fullName}</b> <span style={{ color: "#64748b" }}>({emp.position})</span></span>
+                                                  </label>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
                   </section>)}
                 </div>)}</div>
                 {plans.canManage && <div className="row-actions">

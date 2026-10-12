@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { actionPlans, annualWorkPlans, employees, performanceAgreements, performanceIndicators } from "../../../db/schema";
 import { hasSakipOperator, requireAuthorizedUser } from "../../lib/access";
@@ -50,6 +50,60 @@ export async function POST(request: Request) {
   try {
     const { me, db, self, canManage } = await actor(request), p = await request.json() as any;
     if (!canManage) return Response.json({ error: "Tidak berwenang mengelola RKT" }, { status: 403 });
+    if (p.kind === "sync-rak-inheritance") {
+      if (!p.rktId || !p.title?.trim() || !Array.isArray(p.employeeIds)) {
+        return Response.json({ error: "Data inheritance tidak lengkap" }, { status: 400 });
+      }
+      const targetRktId = Number(p.rktId);
+      const targetTitle = p.title.trim();
+      const selectedEmpIds = p.employeeIds.map((id: any) => Number(id));
+
+      // Get existing action plans for this rktId and title
+      const existing = await db
+        .select()
+        .from(actionPlans)
+        .where(and(eq(actionPlans.rktId, targetRktId), eq(actionPlans.title, targetTitle)));
+
+      const allStaff = await db.select().from(employees);
+
+      // Add actions for newly checked employees
+      for (const empId of selectedEmpIds) {
+        const alreadyHas = existing.some((a) => a.picEmployeeId === empId);
+        if (!alreadyHas) {
+          const emp = allStaff.find((e) => e.id === empId);
+          await db.insert(actionPlans).values({
+            rktId: targetRktId,
+            title: targetTitle,
+            description: (p.description || "").trim(),
+            responsibleUnit: emp?.unitSubsection || (p.responsibleUnit || "").trim(),
+            picEmployeeId: empId,
+            deadline: p.deadline || "",
+            createdBy: me.email,
+          });
+        }
+      }
+
+      // Remove actions for unchecked employees (only if not yet progressed)
+      for (const act of existing) {
+        if (act.picEmployeeId && !selectedEmpIds.includes(act.picEmployeeId)) {
+          // If progress is 0, we can safely delete
+          if ((Number(act.progress) || 0) === 0 && !act.evidence?.trim()) {
+            await db.delete(actionPlans).where(eq(actionPlans.id, act.id));
+          }
+        }
+      }
+
+      await logSecurityEvent(request, {
+        actorEmail: me.email,
+        actorRole: me.role,
+        action: "UPDATE",
+        resourceType: "action_plan_inheritance",
+        resourceId: targetTitle,
+        after: { rktId: targetRktId, count: selectedEmpIds.length },
+      });
+
+      return Response.json({ success: true }, { status: 200 });
+    }
     if (p.kind === "action") {
       if (!p.rktId || !p.title?.trim()) return Response.json({ error: "RKT dan uraian Rencana Aksi wajib diisi" }, { status: 400 });
       if (p.id) {
