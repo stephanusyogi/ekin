@@ -513,6 +513,21 @@ export const performanceEvaluations = mysqlTable(
   (table) => [uniqueIndex("evaluation_indicator_period_unique").on(table.indicatorId, table.periodType, table.periodKey)],
 );
 
+export const monevPeriodLocks = mysqlTable(
+  "monev_period_locks",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().autoincrement(),
+    year: int("year").notNull(),
+    periodType: varchar("period_type", { length: 30 }).notNull().default("Triwulanan"),
+    periodKey: varchar("period_key", { length: 50 }).notNull(),
+    isLocked: boolean("is_locked").notNull().default(true),
+    lockedAt: varchar("locked_at", { length: 255 }).notNull().default(sql`CURRENT_TIMESTAMP`),
+    lockedBy: varchar("locked_by", { length: 255 }).notNull(),
+    notes: text("notes"),
+  },
+  (table) => [uniqueIndex("monev_lock_unique").on(table.year, table.periodType, table.periodKey)],
+);
+
 export const annualWorkPlans = mysqlTable("annual_work_plans", {
   id: bigint("id", { mode: "number" }).primaryKey().autoincrement(),
   documentKey: varchar("document_key", { length: 255 }).notNull().default(""),

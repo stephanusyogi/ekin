@@ -31,15 +31,19 @@ const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Jul
 const monthlyPeriods = [1, 2, 4, 5, 7, 8, 10, 11];
 const periodOrder = (type: string, value: string) => {
   if (type === "Tahunan") return Number(value) * 12 + 12;
-  const quarter = String(value || "").match(/^(\d{4})-Q([1-3])$/);
+  const quarter = String(value || "").match(/^(\d{4})-Q([1-4])$/);
   if (quarter) return Number(quarter[1]) * 12 + Number(quarter[2]) * 3;
   const month = String(value || "").match(/^(\d{4})-(\d{2})$/);
   return month ? Number(month[1]) * 12 + Number(month[2]) : 0;
 };
 const periodDetails = (type: string, value: string) => {
   if (type === "Tahunan") return { evaluated: `Tahun Kinerja ${value}`, submitted: `Januari ${Number(value) + 1}` };
-  const quarter = String(value || "").match(/^(\d{4})-Q([1-3])$/);
-  if (quarter) return { evaluated: `Triwulan ${quarter[2]} Tahun ${quarter[1]}`, submitted: `${monthNames[Number(quarter[2]) * 3]} ${quarter[1]}` };
+  const quarter = String(value || "").match(/^(\d{4})-Q([1-4])$/);
+  if (quarter) {
+    const qNum = Number(quarter[2]);
+    const submittedMonth = qNum === 4 ? `Januari ${Number(quarter[1]) + 1}` : `${monthNames[qNum * 3]} ${quarter[1]}`;
+    return { evaluated: `Triwulan ${quarter[2]} Tahun ${quarter[1]}`, submitted: submittedMonth };
+  }
   const month = String(value || "").match(/^(\d{4})-(\d{2})$/);
   if (month) return { evaluated: `${monthNames[Number(month[2]) - 1]} ${month[1]}`, submitted: `${monthNames[Number(month[2])]} ${month[1]}` };
   return { evaluated: "Belum dipilih", submitted: "—" };
@@ -91,6 +95,7 @@ export default function PerformanceAgreementCenter() {
     [viewingActions, setViewingActions] = useState<any>(null),
     [monevTypeFilter, setMonevTypeFilter] = useState("Semua"),
     [monevYearFilter, setMonevYearFilter] = useState(String(year)),
+    [monevQuarterFilter, setMonevQuarterFilter] = useState("Semua"),
     [monevUnitFilter, setMonevUnitFilter] = useState("Semua"),
     [form, setForm] = useState<any>({
       employeeId: "",
@@ -510,8 +515,40 @@ export default function PerformanceAgreementCenter() {
             Math.max(1, visible.flatMap((a: any) => a.indicators).length),
         )
       : 0,
+    isMonevLocked = (periodKey: string) => {
+      const lock = (data.monevLocks || []).find((l: any) => l.periodKey === periodKey);
+      return Boolean(lock?.isLocked);
+    },
+    getMonevLockInfo = (periodKey: string) => {
+      return (data.monevLocks || []).find((l: any) => l.periodKey === periodKey) || null;
+    },
+    getDefaultActiveQuarter = (targetYear: number) => {
+      for (const q of [1, 2, 3, 4]) {
+        const key = `${targetYear}-Q${q}`;
+        if (!isMonevLocked(key)) return key;
+      }
+      return `${targetYear}-Q4`;
+    },
+    toggleMonevLock = async (targetYear: number, qNum: number, currentLocked: boolean) => {
+      const pKey = `${targetYear}-Q${qNum}`;
+      await request("/api/monev-locks", {
+        year: targetYear,
+        periodType: "Triwulanan",
+        periodKey: pKey,
+        isLocked: !currentLocked,
+        notes: !currentLocked ? `Dikunci pada ${new Date().toLocaleDateString("id-ID")}` : "Kunci dibuka kembali",
+      });
+      await load();
+    },
     monitorAgreements = data.agreements.filter((a:any) => (monevYearFilter === "Semua" || String(a.year) === monevYearFilter) && (monevUnitFilter === "Semua" || a.employee?.unitSubsection === monevUnitFilter)),
-    monevPrintRows = monitorAgreements.flatMap((a:any) => a.evaluations.filter((e:any) => monevTypeFilter === "Semua" || e.periodType === monevTypeFilter).map((e:any) => ({ a, e, indicator: a.indicators.find((i:any) => i.id === e.indicatorId) })));
+    evaluationMatchesFilter = (e: any) => {
+      if (monevTypeFilter !== "Semua" && e.periodType !== monevTypeFilter) return false;
+      if (monevQuarterFilter !== "Semua") {
+        if (!e.periodKey.endsWith(monevQuarterFilter)) return false;
+      }
+      return true;
+    },
+    monevPrintRows = monitorAgreements.flatMap((a:any) => a.evaluations.filter(evaluationMatchesFilter).map((e:any) => ({ a, e, indicator: a.indicators.find((i:any) => i.id === e.indicatorId) })));
   return (
     <section className="pk-page">
       <div className="page-title">
@@ -1051,9 +1088,42 @@ export default function PerformanceAgreementCenter() {
       )}
       {tab === "monitor" && (
         <div>
+          {/* Banner Kontrol Penguncian Periode untuk Pimpinan / SAKIP Operator */}
+          <div className="monev-period-banner">
+            <div className="monev-period-banner-info">
+              <b>Status Kunci Periode Monev (Tahun {monevYearFilter === "Semua" ? year : monevYearFilter}):</b>
+              <span>Kunci data agar pengisian dialihkan ke periode berikutnya dan data triwulan sebelumnya terkunci aman.</span>
+            </div>
+            <div className="monev-period-banner-actions">
+              {[1, 2, 3, 4].map((q) => {
+                const targetYr = monevYearFilter === "Semua" ? year : Number(monevYearFilter);
+                const pKey = `${targetYr}-Q${q}`;
+                const locked = isMonevLocked(pKey);
+                return (
+                  <div key={q} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                    <span className={`monev-lock-badge ${locked ? "locked" : "active"}`}>
+                      {locked ? "🔒" : "🟢"} TW {q} {locked ? "Terkunci" : "Terbuka"}
+                    </span>
+                    {data.canManageAll && (
+                      <button
+                        type="button"
+                        className={`monev-lock-btn ${locked ? "unlock" : "lock"}`}
+                        onClick={() => toggleMonevLock(targetYr, q, locked)}
+                        title={locked ? "Buka kembali kunci Monev" : "Kunci periode Monev ini"}
+                      >
+                        {locked ? "Buka" : "Kunci"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="monev-filters">
             <label>Tahun<select value={monevYearFilter} onChange={(e) => setMonevYearFilter(e.target.value)}><option>Semua</option>{[...new Set(data.agreements.map((a:any) => String(a.year)))].map((x:any) => <option key={x}>{x}</option>)}</select></label>
             <label>Periode<select value={monevTypeFilter} onChange={(e) => setMonevTypeFilter(e.target.value)}><option>Semua</option><option>Bulanan</option><option>Triwulanan</option><option>Tahunan</option></select></label>
+            <label>Filter Triwulan<select value={monevQuarterFilter} onChange={(e) => setMonevQuarterFilter(e.target.value)}><option value="Semua">Semua Triwulan</option><option value="Q1">Triwulan 1 (TW 1)</option><option value="Q2">Triwulan 2 (TW 2)</option><option value="Q3">Triwulan 3 (TW 3)</option><option value="Q4">Triwulan 4 (TW 4)</option></select></label>
             <label>Unit/Subbagian<select value={monevUnitFilter} onChange={(e) => setMonevUnitFilter(e.target.value)}><option>Semua</option>{[...new Set(data.agreements.map((a:any) => a.employee?.unitSubsection).filter(Boolean))].map((x:any) => <option key={x}>{x}</option>)}</select></label>
             <button onClick={() => { setEditing({ type: "print-monev", rows: monevPrintRows }); setTimeout(() => window.print(), 50); }}>Cetak Rekap Monev</button>
           </div>
@@ -1080,19 +1150,52 @@ export default function PerformanceAgreementCenter() {
                 </div>
                 <div className="monitor-detail">
                   <span>Realisasi output terakhir: {i.realization || "Belum diisi"}</span>
-                  <span>Riwayat Monev: {a.evaluations.filter((e:any) => e.indicatorId === i.id && (monevTypeFilter === "Semua" || e.periodType === monevTypeFilter)).length}</span>
+                  <span>Riwayat Monev: {a.evaluations.filter((e:any) => e.indicatorId === i.id && evaluationMatchesFilter(e)).length}</span>
                 </div>
                 <div className="row-actions">
-                  {(data.canManageAll || a.employeeId === data.currentEmployee?.id) && <button onClick={() => setEditing({ type: "monev", agreement: a, indicator: i, form: blankMonev() })}>+ Tambah Monev</button>}
+                  {(data.canManageAll || a.employeeId === data.currentEmployee?.id) && (
+                    <button onClick={() => setEditing({
+                      type: "monev",
+                      agreement: a,
+                      indicator: i,
+                      form: {
+                        ...blankMonev(),
+                        periodType: "Triwulanan",
+                        periodKey: getDefaultActiveQuarter(Number(a.year || year)),
+                      }
+                    })}>
+                      + Tambah Monev
+                    </button>
+                  )}
                 </div>
-                <div className="monev-history">{a.evaluations.filter((e:any) => e.indicatorId === i.id && (monevTypeFilter === "Semua" || e.periodType === monevTypeFilter)).map((e:any) => <section key={e.id}>
-                  <header><b>{e.periodType} · {periodDetails(e.periodType, e.periodKey).evaluated}</b><strong>{e.progress}%</strong></header>
-                  <p><b>Waktu pengisian:</b> {periodDetails(e.periodType, e.periodKey).submitted}</p>
-                  <div><span>Realisasi Anggaran</span><b>{rupiah(e.budgetRealization)}</b></div>
-                  <p><b>Realisasi Output:</b> {e.outputRealization || "—"}</p><p><b>Permasalahan:</b> {e.problemIdentification || "—"}</p><p><b>Upaya Peningkatan:</b> {e.improvementEffort || "—"}</p><p><b>Kegiatan:</b> {e.completedActivities || "—"}</p><p><b>Keterangan:</b> {e.notes || "—"}</p>
-                  {!!e.evidenceLinks.length && <div className="monev-links">{e.evidenceLinks.map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}
-                  {(data.canManageAll || a.employeeId === data.currentEmployee?.id) && <div className="row-actions"><button onClick={() => setEditing({ type: "monev", agreement: a, indicator: i, form: { ...e, evidenceLinks: e.evidenceLinks.length ? e.evidenceLinks : [""] } })}>Edit</button><button className="danger" onClick={() => request(`/api/performance-evaluations?id=${e.id}`, {}, "DELETE")}>Hapus</button></div>}
-                </section>)}</div>
+                <div className="monev-history">{a.evaluations.filter((e:any) => e.indicatorId === i.id && evaluationMatchesFilter(e)).map((e:any) => {
+                  const locked = isMonevLocked(e.periodKey);
+                  return (
+                    <section key={e.id} style={locked ? { borderLeft: "4px solid #f87171", background: "#fef8f8" } : {}}>
+                      <header>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <b>{e.periodType} · {periodDetails(e.periodType, e.periodKey).evaluated}</b>
+                          {locked ? (
+                            <span className="monev-lock-badge locked" title="Data pada periode ini sudah dikunci oleh Pimpinan">🔒 Terkunci</span>
+                          ) : (
+                            <span className="monev-lock-badge active" title="Periode masih aktif / terbuka">🟢 Aktif</span>
+                          )}
+                        </div>
+                        <strong>{e.progress}%</strong>
+                      </header>
+                      <p><b>Waktu pengisian:</b> {periodDetails(e.periodType, e.periodKey).submitted}</p>
+                      <div><span>Realisasi Anggaran</span><b>{rupiah(e.budgetRealization)}</b></div>
+                      <p><b>Realisasi Output:</b> {e.outputRealization || "—"}</p><p><b>Permasalahan:</b> {e.problemIdentification || "—"}</p><p><b>Upaya Peningkatan:</b> {e.improvementEffort || "—"}</p><p><b>Kegiatan:</b> {e.completedActivities || "—"}</p><p><b>Keterangan:</b> {e.notes || "—"}</p>
+                      {!!e.evidenceLinks.length && <div className="monev-links">{e.evidenceLinks.map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}
+                      {(data.canManageAll || (a.employeeId === data.currentEmployee?.id && !locked)) && (
+                        <div className="row-actions">
+                          <button onClick={() => setEditing({ type: "monev", agreement: a, indicator: i, form: { ...e, evidenceLinks: e.evidenceLinks.length ? e.evidenceLinks : [""] } })}>Edit</button>
+                          <button className="danger" onClick={() => request(`/api/performance-evaluations?id=${e.id}`, {}, "DELETE")}>Hapus</button>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}</div>
               </article>
             ))}
           </div>
@@ -1816,10 +1919,30 @@ export default function PerformanceAgreementCenter() {
             <div className="module-form">
               <div className="pk-form-grid">
                 <label>Jenis Periode<select value={editing.form.periodType} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, periodType: e.target.value, periodKey: "" } })}><option>Bulanan</option><option>Triwulanan</option><option>Tahunan</option></select></label>
-                <label>Periode yang Dievaluasi<select value={editing.form.periodKey} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, periodKey: e.target.value } })}><option value="">Pilih periode</option>{editing.form.periodType === "Bulanan" && monthlyPeriods.map((month) => <option value={`${editing.agreement.year}-${String(month).padStart(2, "0")}`} key={month}>{monthNames[month - 1]} {editing.agreement.year}</option>)}{editing.form.periodType === "Triwulanan" && [1,2,3].map((q) => <option value={`${editing.agreement.year}-Q${q}`} key={q}>Triwulan {q} · {editing.agreement.year}</option>)}{editing.form.periodType === "Tahunan" && <option value={String(editing.agreement.year)}>Tahun Kinerja {editing.agreement.year}</option>}</select></label>
+                <label>Periode yang Dievaluasi
+                  <select value={editing.form.periodKey} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, periodKey: e.target.value } })}>
+                    <option value="">Pilih periode</option>
+                    {editing.form.periodType === "Bulanan" && monthlyPeriods.map((month) => {
+                      const pKey = `${editing.agreement.year}-${String(month).padStart(2, "0")}`;
+                      const locked = isMonevLocked(pKey);
+                      return <option value={pKey} key={month}>{monthNames[month - 1]} {editing.agreement.year} {locked ? "(🔒 Terkunci)" : ""}</option>;
+                    })}
+                    {editing.form.periodType === "Triwulanan" && [1,2,3,4].map((q) => {
+                      const pKey = `${editing.agreement.year}-Q${q}`;
+                      const locked = isMonevLocked(pKey);
+                      return <option value={pKey} key={q}>Triwulan {q} · {editing.agreement.year} {locked ? "(🔒 Terkunci)" : ""}</option>;
+                    })}
+                    {editing.form.periodType === "Tahunan" && <option value={String(editing.agreement.year)}>Tahun Kinerja {editing.agreement.year}</option>}
+                  </select>
+                </label>
                 <label>Progress (%)<input type="number" min="0" max="100" value={editing.form.progress} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, progress: e.target.value } })} /></label>
                 <label>Realisasi Anggaran{editing.agreement.budgetTotal > 0 ? <input type="number" min="0" value={editing.form.budgetRealization} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, budgetRealization: e.target.value } })} /> : <input value="Tidak ada anggaran" disabled />}</label>
               </div>
+              {isMonevLocked(editing.form.periodKey) && (
+                <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "8px 12px", fontSize: "8.5px", color: "#991b1b", margin: "8px 0" }}>
+                  ⚠️ <b>Periode Ini Sedang Terkunci:</b> Pimpinan telah mengunci data pada periode ini. Jika Anda bukan pimpinan/operator SAKIP, perubahan pada periode ini tidak dapat disimpan.
+                </div>
+              )}
               <div className="monev-schedule-note"><b>Waktu pengisian: {periodDetails(editing.form.periodType, editing.form.periodKey).submitted}</b><span>Monev hanya memuat kegiatan yang telah selesai pada periode yang dievaluasi. Triwulanan dan tahunan merupakan rekap kumulatif.</span></div>
               {(() => {
                 const previous = previousMonev(editing.agreement, editing.indicator.id, editing.form);

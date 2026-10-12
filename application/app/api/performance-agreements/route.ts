@@ -4,6 +4,7 @@ import {
   actionPlans,
   annualWorkPlans,
   employees,
+  monevPeriodLocks,
   organizationCoordinations,
   performanceAgreements,
   performanceBudgets,
@@ -64,9 +65,14 @@ export async function GET(request: Request) {
       actions = await db
         .select()
         .from(actionPlans)
-        .orderBy(asc(actionPlans.deadline));
+        .orderBy(asc(actionPlans.deadline)),
+      monevLocks = await db
+        .select()
+        .from(monevPeriodLocks)
+        .orderBy(asc(monevPeriodLocks.periodKey));
     return Response.json({
       canManageAll: manageAll,
+      monevLocks,
       selfEmployeeId: self?.id || null,
       currentEmployee: self
         ? { id: self.id, position: self.position, unit: self.unitSubsection }

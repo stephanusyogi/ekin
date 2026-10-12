@@ -1,16 +1,21 @@
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { employees, performanceAgreements, performanceBudgets, performanceEvaluations, performanceIndicators } from "../../../db/schema";
+import { employees, monevPeriodLocks, performanceAgreements, performanceBudgets, performanceEvaluations, performanceIndicators } from "../../../db/schema";
 import { hasSakipOperator, requireAuthorizedUser } from "../../lib/access";
 import { cleanEvidenceLinks, logSecurityEvent } from "../../lib/security";
 
 const managers = ["super_user", "super_admin", "admin"];
 const validPeriod = (type: string, key: string, year: number) => {
   if (type === "Bulanan") return [`${year}-01`, `${year}-02`, `${year}-04`, `${year}-05`, `${year}-07`, `${year}-08`, `${year}-10`, `${year}-11`].includes(key);
-  if (type === "Triwulanan") return [`${year}-Q1`, `${year}-Q2`, `${year}-Q3`].includes(key);
+  if (type === "Triwulanan") return [`${year}-Q1`, `${year}-Q2`, `${year}-Q3`, `${year}-Q4`].includes(key);
   return type === "Tahunan" && key === String(year);
 };
 const cleanLinks = cleanEvidenceLinks;
+
+async function isPeriodLocked(db: ReturnType<typeof getDb>, periodKey: string) {
+  const [lock] = await db.select().from(monevPeriodLocks).where(eq(monevPeriodLocks.periodKey, periodKey)).limit(1);
+  return Boolean(lock?.isLocked);
+}
 
 async function context(request: Request) {
   const me = await requireAuthorizedUser(request), db = getDb();
@@ -38,12 +43,16 @@ export async function POST(request: Request) {
     const [indicator] = await db.select().from(performanceIndicators).where(eq(performanceIndicators.id, Number(p.indicatorId))).limit(1);
     const [agreement] = indicator ? await db.select().from(performanceAgreements).where(eq(performanceAgreements.id, indicator.agreementId)).limit(1) : [];
     if (!indicator || !agreement) return Response.json({ error: "Indikator tidak ditemukan" }, { status: 404 });
-    if (!managers.includes(me.role) && !hasSakipOperator(me) && agreement.employeeId !== self?.id) return Response.json({ error: "Tidak berwenang" }, { status: 403 });
+    const canManage = managers.includes(me.role) || hasSakipOperator(me);
+    if (!canManage && agreement.employeeId !== self?.id) return Response.json({ error: "Tidak berwenang" }, { status: 403 });
+    if (!validPeriod(p.periodType, p.periodKey, agreement.year)) return Response.json({ error: "Periode Monev tidak sesuai kalender Monev tahun kinerja" }, { status: 400 });
+    if (!canManage && await isPeriodLocked(db, p.periodKey)) {
+      return Response.json({ error: `Periode Monev (${p.periodKey}) sudah dikunci oleh Pimpinan. Input data dialihkan ke periode berikutnya.` }, { status: 403 });
+    }
     const amount = Math.max(0, Number(p.budgetRealization) || 0);
     const budgets = await db.select().from(performanceBudgets).where(eq(performanceBudgets.agreementId, agreement.id));
     const ceiling = budgets.reduce((sum, x) => sum + x.amount, 0);
     if (amount > ceiling && !(p.notes || "").trim()) return Response.json({ error: "Realisasi melebihi alokasi. Isi Keterangan untuk menjelaskan selisihnya." }, { status: 400 });
-    if (!validPeriod(p.periodType, p.periodKey, agreement.year)) return Response.json({ error: "Periode Monev tidak sesuai kalender Monev tahun kinerja" }, { status: 400 });
     const [res] = await db.insert(performanceEvaluations).values({
       agreementId: agreement.id, indicatorId: indicator.id, periodType: p.periodType, periodKey: p.periodKey,
       progress: Math.max(0, Math.min(100, Number(p.progress) || 0)), budgetRealization: amount,
@@ -67,8 +76,12 @@ export async function PATCH(request: Request) {
     const [row] = await db.select().from(performanceEvaluations).where(eq(performanceEvaluations.id, Number(p.id))).limit(1);
     const [agreement] = row ? await db.select().from(performanceAgreements).where(eq(performanceAgreements.id, row.agreementId)).limit(1) : [];
     if (!row || !agreement) return Response.json({ error: "Data Monev tidak ditemukan" }, { status: 404 });
-    if (!managers.includes(me.role) && !hasSakipOperator(me) && agreement.employeeId !== self?.id) return Response.json({ error: "Tidak berwenang" }, { status: 403 });
+    const canManage = managers.includes(me.role) || hasSakipOperator(me);
+    if (!canManage && agreement.employeeId !== self?.id) return Response.json({ error: "Tidak berwenang" }, { status: 403 });
     if (!validPeriod(p.periodType, p.periodKey, agreement.year)) return Response.json({ error: "Periode Monev tidak sesuai kalender Monev tahun kinerja" }, { status: 400 });
+    if (!canManage && (await isPeriodLocked(db, row.periodKey) || await isPeriodLocked(db, p.periodKey))) {
+      return Response.json({ error: "Periode Monev ini sudah dikunci oleh Pimpinan dan tidak dapat diubah." }, { status: 403 });
+    }
     const amount = Math.max(0, Number(p.budgetRealization) || 0), budgets = await db.select().from(performanceBudgets).where(eq(performanceBudgets.agreementId, agreement.id));
     const ceiling = budgets.reduce((sum, x) => sum + x.amount, 0);
     if (amount > ceiling && !(p.notes || "").trim()) return Response.json({ error: "Realisasi melebihi alokasi. Isi Keterangan untuk menjelaskan selisihnya." }, { status: 400 });
@@ -92,7 +105,11 @@ export async function DELETE(request: Request) {
     const [row] = await db.select().from(performanceEvaluations).where(eq(performanceEvaluations.id, id)).limit(1);
     const [agreement] = row ? await db.select().from(performanceAgreements).where(eq(performanceAgreements.id, row.agreementId)).limit(1) : [];
     if (!row || !agreement) return Response.json({ error: "Data Monev tidak ditemukan" }, { status: 404 });
-    if (!managers.includes(me.role) && !hasSakipOperator(me) && agreement.employeeId !== self?.id) return Response.json({ error: "Tidak berwenang" }, { status: 403 });
+    const canManage = managers.includes(me.role) || hasSakipOperator(me);
+    if (!canManage && agreement.employeeId !== self?.id) return Response.json({ error: "Tidak berwenang" }, { status: 403 });
+    if (!canManage && await isPeriodLocked(db, row.periodKey)) {
+      return Response.json({ error: "Periode Monev ini sudah dikunci oleh Pimpinan dan tidak dapat dihapus." }, { status: 403 });
+    }
     await db.delete(performanceEvaluations).where(eq(performanceEvaluations.id, id));
     await logSecurityEvent(request,{actorEmail:me.email,actorRole:me.role,action:"DELETE",resourceType:"monev",resourceId:id,before:row});
     await refreshIndicator(db, row.indicatorId);
