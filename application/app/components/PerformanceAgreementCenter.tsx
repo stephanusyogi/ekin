@@ -822,7 +822,7 @@ export default function PerformanceAgreementCenter() {
                       policyOwnerId: nextType === "Sekretaris"
                         ? plans.employees.find((emp: any) => emp.position === "Sekretaris")?.id || rktForm.policyOwnerId
                         : plans.employees.find((emp: any) => emp.position === "Ketua")?.id || rktForm.policyOwnerId,
-                      programs: nextType === "Sekretaris" ? [] : [blankRktProgram()],
+                      programs: [blankRktProgram()],
                     });
                   }}
                 >
@@ -856,7 +856,7 @@ export default function PerformanceAgreementCenter() {
               </label>
               {!rktForm.documentKey && rktForm.rktType === "Sekretaris" && (
                 <label>
-                  Program (dari RKT Ketua)
+                  Program dari RKT Ketua (Opsional)
                   <select
                     value={selectedKetuaProgram}
                     onChange={(e) => {
@@ -880,12 +880,12 @@ export default function PerformanceAgreementCenter() {
                       } else {
                         setRktForm((prev: any) => ({
                           ...prev,
-                          programs: [],
+                          programs: prev.programs?.length ? prev.programs : [blankRktProgram()],
                         }));
                       }
                     }}
                   >
-                    <option value="">-- Pilih Program RKT Ketua --</option>
+                    <option value="">-- Buat Program Sendiri (Manual) --</option>
                     {(plans.documents || [])
                       .filter((d: any) => d.rktType === "Ketua" || d.scope === "Instansi")
                       .flatMap((d: any) =>
@@ -904,25 +904,13 @@ export default function PerformanceAgreementCenter() {
                 </label>
               )}
               {(() => {
-                const isSekretarisFromKetua = !rktForm.documentKey && rktForm.rktType === "Sekretaris";
-                if (isSekretarisFromKetua && !selectedKetuaProgram) {
-                  return (
-                    <div className="rkt-builder">
-                      <div className="rkt-builder-title">
-                        <b>Struktur RKT {rktForm.rktType}</b>
-                      </div>
-                      <p style={{ color: "#64748b", margin: "1rem 0", fontStyle: "italic" }}>
-                        Silakan pilih Program dari RKT Ketua pada dropdown di atas untuk memuat struktur sasaran dan indikator.
-                      </p>
-                    </div>
-                  );
-                }
+                const isSekretarisFromKetua = !rktForm.documentKey && rktForm.rktType === "Sekretaris" && Boolean(selectedKetuaProgram);
                 return (
                   <div className="rkt-builder">
                     <div className="rkt-builder-title">
                       <b>Struktur RKT {rktForm.rktType} {isSekretarisFromKetua ? "(Hanya Lihat - Mengikuti RKT Ketua)" : ""}</b>
                       {!isSekretarisFromKetua && (
-                        <button onClick={() => setRktForm({ ...rktForm, programs: [...rktForm.programs, blankRktProgram()] })}>+ Program/Kegiatan</button>
+                        <button onClick={() => setRktForm({ ...rktForm, programs: [...(rktForm.programs || []), blankRktProgram()] })}>+ Program/Kegiatan</button>
                       )}
                     </div>
                     {rktForm.programs.map((program:any, programIndex:number) => <article key={programIndex}>
