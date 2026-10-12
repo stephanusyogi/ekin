@@ -379,31 +379,41 @@ export default function PerformanceAgreementCenter() {
                         const subbagUnits = Array.from(new Set(allEmps.filter((e: any) => e.position !== "Ketua" && e.position !== "Anggota" && e.position !== "Sekretaris").map((e: any) => e.unit || "Lainnya"))).sort();
 
                         return (
-                          <div key={actIdx} style={{ marginLeft: "1rem", padding: "0.65rem 0.85rem", background: "#f8fafc", borderLeft: "4px solid #3b82f6", marginTop: "0.6rem", borderRadius: "0 8px 8px 0" }}>
+                          <div key={actIdx} style={{ marginLeft: "1rem", padding: "0.5rem 0.75rem", background: "#f8fafc", borderLeft: "4px solid #3b82f6", marginTop: "0.5rem", borderRadius: "0 8px 8px 0" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", flexWrap: "wrap" }}>
                               <div>
-                                <span style={{ fontSize: "0.95rem" }}><b>RAK:</b> {firstAct.title} <span style={{ fontSize: "0.85rem", color: "#64748b" }}>(Batas Waktu: {firstAct.deadline || "—"})</span></span>
-                                {firstAct.description && <span style={{ color: "#64748b", display: "block", fontSize: "0.85rem", marginTop: "0.15rem" }}>{firstAct.description}</span>}
+                                <span style={{ fontSize: "10px", color: "#0f172a", display: "inline-block" }}>
+                                  <b>RAK:</b> {firstAct.title}{" "}
+                                  <span style={{ fontSize: "9px", color: "#64748b", display: "inline" }}>(Batas Waktu: {firstAct.deadline || "—"})</span>
+                                </span>
+                                {firstAct.description && (
+                                  <span style={{ color: "#64748b", display: "block", fontSize: "9px", marginTop: "2px" }}>
+                                    {firstAct.description}
+                                  </span>
+                                )}
                               </div>
-                              <span style={{ fontSize: "0.8rem", background: assignedEmployees.length ? "#e0f2fe" : "#f1f5f9", color: assignedEmployees.length ? "#0369a1" : "#64748b", padding: "2px 8px", borderRadius: "12px", fontWeight: 600 }}>
+                              <span style={{ fontSize: "8px", background: assignedEmployees.length ? "#e0f2fe" : "#f1f5f9", color: assignedEmployees.length ? "#0369a1" : "#64748b", padding: "2px 8px", borderRadius: "10px", fontWeight: 700, display: "inline-block" }}>
                                 {assignedEmployees.length} PIC Terdistribusi
                               </span>
                             </div>
 
-                            <div style={{ marginTop: "0.4rem", fontSize: "0.85rem", color: "#475569" }}>
-                              <b>PIC Aktif:</b> {assignedEmployees.length ? assignedEmployees.map((e: any) => `${e.fullName} (${e.position}${e.unit ? ` - ${e.unit}` : ""})`).join(", ") : <span style={{ color: "#94a3b8" }}>Belum ada PIC ditugaskan</span>}
+                            <div style={{ marginTop: "0.35rem", fontSize: "9px", color: "#475569" }}>
+                              <b style={{ display: "inline" }}>PIC Aktif:</b>{" "}
+                              <span style={{ display: "inline", color: assignedEmployees.length ? "#334155" : "#94a3b8" }}>
+                                {assignedEmployees.length ? assignedEmployees.map((e: any) => `${e.fullName} (${e.position}${e.unit ? ` - ${e.unit}` : ""})`).join(", ") : "Belum ada PIC ditugaskan"}
+                              </span>
                             </div>
 
                             {plans.canManage && (
-                              <div className="row-actions" style={{ marginTop: "0.5rem", justifyContent: "flex-start", alignItems: "center", gap: "8px" }}>
+                              <div className="row-actions" style={{ marginTop: "0.4rem", justifyContent: "flex-start", alignItems: "center", gap: "6px" }}>
                                 <button
-                                  style={{ background: isExpanded ? "#1e293b" : "#fff", color: isExpanded ? "#fff" : "#168765", borderColor: isExpanded ? "#1e293b" : "#cfe0da", fontWeight: 600 }}
+                                  style={{ background: isExpanded ? "#1e293b" : "#fff", color: isExpanded ? "#fff" : "#168765", borderColor: isExpanded ? "#1e293b" : "#cfe0da", fontWeight: 600, fontSize: "9px", padding: "4px 8px" }}
                                   onClick={() => setExpandedRakTree((prev) => ({ ...prev, [treeKey]: !prev[treeKey] }))}
                                 >
                                   {isExpanded ? "▲ Tutup Inheritance PIC" : `▼ Inheritance ke Hirarki Organisasi (${assignedEmployees.length})`}
                                 </button>
-                                <button onClick={() => { setActionForm({ ...firstAct, rktId: firstAct.rktId }); setShowAction(true); }}>Edit</button>
-                                <button className="danger" onClick={() => {
+                                <button style={{ fontSize: "9px", padding: "4px 8px" }} onClick={() => { setActionForm({ ...firstAct, rktId: firstAct.rktId }); setShowAction(true); }}>Edit</button>
+                                <button style={{ fontSize: "9px", padding: "4px 8px" }} className="danger" onClick={() => {
                                   if (confirm(`Hapus seluruh rencana aksi "${title}" (${sharedActions.length} data)?`)) {
                                     Promise.all(sharedActions.map((a: any) => request(`/api/work-plans?actionId=${a.id}`, {}, "DELETE")));
                                   }
@@ -413,35 +423,35 @@ export default function PerformanceAgreementCenter() {
 
                             {/* Organization Tree Section */}
                             {isExpanded && plans.canManage && (
-                              <div style={{ marginTop: "0.85rem", padding: "0.85rem", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "8px" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", borderBottom: "1px solid #e2e8f0", paddingBottom: "0.5rem" }}>
+                              <div style={{ marginTop: "0.6rem", padding: "0.6rem 0.75rem", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "7px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem", borderBottom: "1px solid #e2e8f0", paddingBottom: "0.4rem" }}>
                                   <div>
-                                    <b style={{ fontSize: "0.9rem", color: "#0f172a" }}>Struktur Organisasi (Checklist Inheritance)</b>
-                                    <p style={{ margin: 0, fontSize: "0.8rem", color: "#64748b" }}>Centang pegawai yang mewarisi RAK & elemen sasaran ini. Perubahan langsung tersinkronisasi otomatis.</p>
+                                    <b style={{ fontSize: "10px", color: "#0f172a" }}>Struktur Organisasi (Checklist Inheritance)</b>
+                                    <p style={{ margin: "2px 0 0", fontSize: "8.5px", color: "#64748b" }}>Centang pegawai yang mewarisi RAK & elemen sasaran ini. Perubahan langsung tersinkronisasi otomatis.</p>
                                   </div>
                                 </div>
 
-                                <div style={{ display: "grid", gap: "0.5rem", fontSize: "0.85rem" }}>
+                                <div style={{ display: "grid", gap: "0.4rem", fontSize: "9px" }}>
                                   {/* Lembaga / Ketua */}
-                                  <div style={{ padding: "0.4rem 0.6rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                    <div style={{ fontWeight: 700, color: "#166534", marginBottom: "0.3rem" }}>● Lembaga / Ketua</div>
+                                  <div style={{ padding: "0.35rem 0.5rem", background: "#f8fafc", borderRadius: "5px", border: "1px solid #e2e8f0" }}>
+                                    <div style={{ fontWeight: 700, color: "#166534", marginBottom: "0.25rem", fontSize: "9px" }}>● Lembaga / Ketua</div>
                                     {ketuaEmps.map((emp: any) => {
                                       const isAssigned = assignedEmpIds.includes(emp.id);
                                       return (
-                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginLeft: "1rem", marginTop: "2px" }}>
+                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginLeft: "0.75rem", marginTop: "2px", fontSize: "9px" }}>
                                           <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
-                                          <span><b>{emp.fullName}</b> <span style={{ color: "#64748b" }}>({emp.position})</span></span>
+                                          <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
                                         </label>
                                       );
                                     })}
                                   </div>
 
                                   {/* Komisioner / Anggota */}
-                                  <div style={{ padding: "0.4rem 0.6rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                                      <span style={{ fontWeight: 700, color: "#1e40af" }}>↳ Komisioner (Anggota)</span>
+                                  <div style={{ padding: "0.35rem 0.5rem", background: "#f8fafc", borderRadius: "5px", border: "1px solid #e2e8f0" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
+                                      <span style={{ fontWeight: 700, color: "#1e40af", fontSize: "9px", display: "inline" }}>↳ Komisioner (Anggota)</span>
                                       <button
-                                        style={{ fontSize: "0.75rem", padding: "1px 6px" }}
+                                        style={{ fontSize: "8px", padding: "2px 6px", border: "1px solid #cbd5e1", borderRadius: "4px", background: "#fff", cursor: "pointer" }}
                                         onClick={() => batchAssignRakGroup(Number(firstAct.rktId), firstAct, anggotaEmps.map((e: any) => e.id), !anggotaEmps.every((e: any) => assignedEmpIds.includes(e.id)))}
                                       >
                                         {anggotaEmps.every((e: any) => assignedEmpIds.includes(e.id)) ? "Batal Semua Anggota" : "Pilih Semua Anggota"}
@@ -450,51 +460,51 @@ export default function PerformanceAgreementCenter() {
                                     {anggotaEmps.map((emp: any) => {
                                       const isAssigned = assignedEmpIds.includes(emp.id);
                                       return (
-                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginLeft: "1rem", marginTop: "4px" }}>
+                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginLeft: "0.75rem", marginTop: "3px", fontSize: "9px" }}>
                                           <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
-                                          <span><b>{emp.fullName}</b> <span style={{ color: "#64748b" }}>({emp.position})</span></span>
+                                          <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
                                         </label>
                                       );
                                     })}
                                   </div>
 
                                   {/* Sekretariat / Sekretaris */}
-                                  <div style={{ padding: "0.4rem 0.6rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                    <div style={{ fontWeight: 700, color: "#854d0e", marginBottom: "0.3rem" }}>↳ Sekretariat (Sekretaris)</div>
+                                  <div style={{ padding: "0.35rem 0.5rem", background: "#f8fafc", borderRadius: "5px", border: "1px solid #e2e8f0" }}>
+                                    <div style={{ fontWeight: 700, color: "#854d0e", marginBottom: "0.25rem", fontSize: "9px" }}>↳ Sekretariat (Sekretaris)</div>
                                     {sekretarisEmps.map((emp: any) => {
                                       const isAssigned = assignedEmpIds.includes(emp.id);
                                       return (
-                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginLeft: "1rem", marginTop: "4px" }}>
+                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginLeft: "0.75rem", marginTop: "3px", fontSize: "9px" }}>
                                           <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
-                                          <span><b>{emp.fullName}</b> <span style={{ color: "#64748b" }}>({emp.position})</span></span>
+                                          <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
                                         </label>
                                       );
                                     })}
 
                                     {/* Subbagian-subbagian di bawah Sekretariat */}
-                                    <div style={{ marginTop: "0.5rem", marginLeft: "1rem", display: "grid", gap: "0.4rem" }}>
+                                    <div style={{ marginTop: "0.35rem", marginLeft: "0.75rem", display: "grid", gap: "0.35rem" }}>
                                       {subbagUnits.map((subbag: string) => {
                                         const subbagEmps = allEmps.filter((e: any) => (e.unit || "Lainnya") === subbag && e.position !== "Ketua" && e.position !== "Anggota" && e.position !== "Sekretaris");
                                         const allChecked = subbagEmps.length > 0 && subbagEmps.every((e: any) => assignedEmpIds.includes(e.id));
 
                                         return (
-                                          <div key={subbag} style={{ background: "#ffffff", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
-                                              <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.85rem" }}>↳ {subbag}</span>
+                                          <div key={subbag} style={{ background: "#ffffff", padding: "0.3rem 0.5rem", borderRadius: "5px", border: "1px solid #e2e8f0" }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.2rem" }}>
+                                              <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "9px", display: "inline" }}>↳ {subbag}</span>
                                               <button
-                                                style={{ fontSize: "0.75rem", padding: "1px 6px" }}
+                                                style={{ fontSize: "8px", padding: "1px 5px", border: "1px solid #cbd5e1", borderRadius: "4px", background: "#fff", cursor: "pointer" }}
                                                 onClick={() => batchAssignRakGroup(Number(firstAct.rktId), firstAct, subbagEmps.map((e: any) => e.id), !allChecked)}
                                               >
                                                 {allChecked ? `Batal Semua ${subbag}` : `Pilih Semua ${subbag}`}
                                               </button>
                                             </div>
-                                            <div style={{ marginLeft: "1rem", display: "grid", gap: "2px" }}>
+                                            <div style={{ marginLeft: "0.75rem", display: "grid", gap: "2px" }}>
                                               {subbagEmps.map((emp: any) => {
                                                 const isAssigned = assignedEmpIds.includes(emp.id);
                                                 return (
-                                                  <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginTop: "2px" }}>
+                                                  <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginTop: "2px", fontSize: "9px" }}>
                                                     <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
-                                                    <span><b>{emp.fullName}</b> <span style={{ color: "#64748b" }}>({emp.position})</span></span>
+                                                    <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
                                                   </label>
                                                 );
                                               })}
