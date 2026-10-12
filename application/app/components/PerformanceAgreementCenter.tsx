@@ -54,6 +54,18 @@ const previousMonev = (agreement: any, indicatorId: number, form: any) => {
 const blankRktIndicator = () => ({ indicator: "", target: "", unit: "" });
 const blankRktObjective = () => ({ objective: "", indicators: [blankRktIndicator()] });
 const blankRktProgram = () => ({ programActivity: "", objectives: [blankRktObjective()] });
+const blankActionForm = (rktId = "") => ({ id: undefined, rktId, title: "", description: "", responsibleUnit: "", picEmployeeId: "", deadline: "" });
+const clonePrograms = (progs: any[]) => (progs || []).map((p: any) => ({
+  programActivity: p.programActivity || "",
+  objectives: (p.objectives || []).map((o: any) => ({
+    objective: o.objective || "",
+    indicators: (o.indicators || []).map((i: any) => ({
+      indicator: i.indicator || "",
+      target: i.target || "",
+      unit: i.unit || "",
+    }))
+  }))
+}));
 export default function PerformanceAgreementCenter() {
   const year = new Date().getFullYear(),
     [tab, setTab] = useState<"rkt" | "pk" | "monitor">("pk"),
@@ -101,14 +113,7 @@ export default function PerformanceAgreementCenter() {
       notes: "",
       status: "Aktif",
     }),
-    [actionForm, setActionForm] = useState<any>({
-      rktId: "",
-      title: "",
-      description: "",
-      responsibleUnit: "",
-      picEmployeeId: "",
-      deadline: "",
-    }),
+    [actionForm, setActionForm] = useState<any>(blankActionForm()),
     [editing, setEditing] = useState<any>(null);
   const notify = (m: string) => {
       setToast(m);
@@ -162,6 +167,7 @@ export default function PerformanceAgreementCenter() {
       setShowPk(false);
       setShowRkt(false);
       setShowAction(false);
+      setActionForm(blankActionForm());
       setEditing(null);
       await load();
     } catch (e) {
@@ -229,7 +235,7 @@ export default function PerformanceAgreementCenter() {
         </div>
         <div className="pk-head-actions">
           {plans.canManage && (
-            <button onClick={() => { setRktForm({ year, rktType: "Ketua", programs: [blankRktProgram()], policyOwnerId: plans.employees.find((e:any) => e.position === "Ketua")?.id || "", notes: "", status: "Aktif" }); setShowRkt(true); }}>+ RKT</button>
+            <button onClick={() => { setRktForm({ year, rktType: "Ketua", programs: [blankRktProgram()], policyOwnerId: plans.employees.find((e:any) => e.position === "Ketua")?.id || "", notes: "", status: "Aktif", documentKey: undefined }); setShowRkt(true); }}>+ RKT</button>
           )}
           <button className="primary" onClick={() => setShowPk(true)}>
             + Buat PK
@@ -323,7 +329,8 @@ export default function PerformanceAgreementCenter() {
                   </section>)}
                 </div>)}</div>
                 {plans.canManage && <div className="row-actions">
-                  <button className="secondary-action" onClick={() => { setActionForm({ ...actionForm, rktId: r.rows[0]?.id || "" }); setShowAction(true); }}>+ Rencana Aksi</button>
+                  <button className="secondary-action" onClick={() => { setActionForm(blankActionForm(r.rows[0]?.id || "")); setShowAction(true); }}>+ Rencana Aksi</button>
+                  <button onClick={() => { setRktForm({ documentKey: undefined, year: Number(r.year) + 1, rktType: r.rktType, policyOwnerId: r.policyOwnerId || "", notes: r.notes || "", status: "Aktif", programs: clonePrograms(r.programs) }); setShowRkt(true); }}>Salin RKT</button>
                   <button onClick={() => { setRktForm({ documentKey: r.documentKey, year: r.year, rktType: r.rktType, policyOwnerId: r.policyOwnerId || "", notes: r.notes || "", status: r.status, programs: r.programs }); setShowRkt(true); }}>Edit</button>
                   {data.canManageAll && <button className="danger" onClick={() => request(`/api/work-plans?documentKey=${encodeURIComponent(r.documentKey)}`, {}, "DELETE")}>Hapus</button>}
                 </div>}
@@ -801,6 +808,31 @@ export default function PerformanceAgreementCenter() {
             <span>RENCANA KERJA TAHUNAN</span>
             <h3>{rktForm.documentKey ? "Edit RKT" : "Tambah RKT"}</h3>
             <div className="module-form">
+              {!rktForm.documentKey && plans.documents?.length > 0 && (
+                <label>
+                  Gunakan Referensi RKT (Opsional)
+                  <select onChange={(e) => {
+                    if (!e.target.value) return;
+                    const refDoc = plans.documents.find((d: any) => d.documentKey === e.target.value);
+                    if (refDoc) {
+                      setRktForm((prev: any) => ({
+                        ...prev,
+                        documentKey: undefined,
+                        rktType: refDoc.rktType,
+                        programs: clonePrograms(refDoc.programs),
+                      }));
+                    }
+                    e.target.value = "";
+                  }}>
+                    <option value="">-- Pilih RKT Sebelumnya sebagai Template --</option>
+                    {plans.documents.map((d: any) => (
+                      <option key={d.documentKey} value={d.documentKey}>
+                        RKT {d.rktType} · {d.year} ({d.programs?.length || 0} Program)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label>
                 Jenis RKT
                 <select
@@ -856,7 +888,7 @@ export default function PerformanceAgreementCenter() {
               </div>
             </div>
             <div className="modal-actions">
-              <button onClick={() => setShowRkt(false)}>Batal</button>
+              <button onClick={() => { setShowRkt(false); setRktForm({ year, rktType: "Ketua", programs: [blankRktProgram()], policyOwnerId: "", notes: "", status: "Aktif", documentKey: undefined }); }}>Batal</button>
               <button
                 className="primary"
                 onClick={() => rktForm.documentKey
@@ -889,13 +921,18 @@ export default function PerformanceAgreementCenter() {
                   if (!e.target.value) return;
                   const ref = plans.documents?.flatMap((d:any) => d.actions || []).find((a:any) => String(a.id) === e.target.value);
                   if (ref) {
-                    setActionForm({ ...actionForm, title: ref.title, description: ref.description || "", deadline: ref.deadline || "" });
+                    setActionForm((prev: any) => ({
+                      ...prev,
+                      title: ref.title,
+                      description: ref.description || "",
+                      deadline: ref.deadline || ""
+                    }));
                   }
                   e.target.value = "";
                 }}>
                   <option value="">-- Pilih Rencana Aksi Sebelumnya --</option>
-                  {Array.from(new Map(plans.documents?.flatMap((d:any) => d.actions || []).filter(Boolean).map((a:any) => [a.title, a])).values()).map((a:any) => (
-                    <option key={a.id} value={a.id}>{a.title}</option>
+                  {Array.from(new Map(plans.documents?.flatMap((d:any) => d.actions || []).filter(Boolean).map((a:any) => [`${a.title}__${a.id}`, a])).values()).map((a:any) => (
+                    <option key={a.id} value={a.id}>{a.title} {a.deadline ? `(${a.deadline})` : ""}</option>
                   ))}
                 </select>
               </label>
@@ -964,7 +1001,7 @@ export default function PerformanceAgreementCenter() {
               </label>
             </div>
             <div className="modal-actions">
-              <button onClick={() => setShowAction(false)}>Batal</button>
+              <button onClick={() => { setShowAction(false); setActionForm(blankActionForm()); }}>Batal</button>
               <button
                 className="primary"
                 onClick={() =>
