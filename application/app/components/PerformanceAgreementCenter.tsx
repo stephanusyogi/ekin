@@ -218,8 +218,8 @@ export default function PerformanceAgreementCenter() {
       employeeIds: currentEmpIds,
     });
   };
-  const buildPkFromInheritance = (targetEmployeeId: number | string) => {
-    const emp = data.employees?.find((e: any) => String(e.id) === String(targetEmployeeId));
+  const buildPkFromInheritance = (targetEmployeeId: number | string, targetDocKey?: string, targetYear?: number) => {
+    const emp = (data.employees || plans.employees)?.find((e: any) => String(e.id) === String(targetEmployeeId));
     if (!emp) return null;
 
     let level = "Staf";
@@ -229,19 +229,53 @@ export default function PerformanceAgreementCenter() {
     else if (pos.includes("sekretaris")) level = "Sekretaris";
     else if (pos.includes("kasubag") || pos.includes("kepala sub")) level = "Subbag";
 
-    // Find all linked actions where picEmployeeId matches targetEmployeeId
-    const linkedActions = (data.actionPlans || []).filter((a: any) => String(a.picEmployeeId) === String(targetEmployeeId));
+    const effectiveYear = Number(targetYear || form.year || year);
+
+    // 1. Isolate documents to prevent cross-RKT or cross-year bleeding
+    const targetDoc = targetDocKey ? plans.documents?.find((d: any) => d.documentKey === targetDocKey) : null;
+    let candidateRows: any[] = [];
+    let candidateActions: any[] = [];
+
+    if (targetDoc) {
+      candidateRows = targetDoc.rows || [];
+      candidateActions = targetDoc.actions || [];
+    } else {
+      const yearDocs = (plans.documents || []).filter((d: any) => Number(d.year) === effectiveYear);
+      if (yearDocs.length > 0) {
+        candidateRows = yearDocs.flatMap((d: any) => d.rows || []);
+        candidateActions = yearDocs.flatMap((d: any) => d.actions || []);
+      } else {
+        candidateRows = (data.rkt || []).filter((r: any) => Number(r.year) === effectiveYear);
+        const candidateRktIds = new Set(candidateRows.map((r: any) => Number(r.id)));
+        candidateActions = (data.actionPlans || []).filter((a: any) => candidateRktIds.has(Number(a.rktId)));
+      }
+    }
+
+    // 2. Find actions assigned to this employee within the candidate pool
+    const linkedActions = candidateActions.filter((a: any) => String(a.picEmployeeId) === String(targetEmployeeId));
     const linkedRktIds = new Set(linkedActions.map((a: any) => Number(a.rktId)).filter(Boolean));
 
-    // Find linked RKT rows
-    let linkedRktRows = (data.rkt || []).filter((r: any) => linkedRktIds.has(Number(r.id)));
+    // 3. Find linked RKT indicator rows
+    let linkedRktRows = candidateRows.filter((r: any) => linkedRktIds.has(Number(r.id)));
 
-    // Fallbacks for Ketua & Sekretaris if no action plans assigned specifically to their ID
-    if (level === "Ketua" && linkedRktRows.length === 0) {
-      linkedRktRows = (data.rkt || []).filter((r: any) => r.rktType === "Ketua" || r.scope === "Instansi");
+    // For Ketua:
+    // If targeted to a specific Ketua document, Ketua inherits ALL rows of that document only!
+    if (level === "Ketua") {
+      if (targetDoc && targetDoc.rktType === "Ketua") {
+        linkedRktRows = targetDoc.rows || [];
+      } else if (!targetDoc && linkedRktRows.length === 0) {
+        linkedRktRows = candidateRows.filter((r: any) => r.rktType === "Ketua" || r.scope === "Instansi");
+      }
     }
-    if (level === "Sekretaris" && linkedRktRows.length === 0) {
-      linkedRktRows = (data.rkt || []).filter((r: any) => r.rktType === "Sekretaris" || r.scope === "Kesekretariatan");
+
+    // For Sekretaris:
+    // If targeted to a specific Sekretaris document, Sekretaris inherits ALL rows of that document only!
+    if (level === "Sekretaris") {
+      if (targetDoc && targetDoc.rktType === "Sekretaris") {
+        linkedRktRows = targetDoc.rows || [];
+      } else if (!targetDoc && linkedRktRows.length === 0) {
+        linkedRktRows = candidateRows.filter((r: any) => r.rktType === "Sekretaris" || r.scope === "Kesekretariatan");
+      }
     }
 
     // Group by strategic objective
@@ -267,7 +301,7 @@ export default function PerformanceAgreementCenter() {
       });
     }
 
-    // If no RKT rows found but has linked actions
+    // If no RKT rows found directly but employee has assigned actions in this scope
     if (objMap.size === 0 && linkedActions.length > 0) {
       for (const act of linkedActions) {
         objMap.set(act.title, {
@@ -305,29 +339,37 @@ export default function PerformanceAgreementCenter() {
 
     const firstRkt = linkedRktRows[0];
     const firstAction = linkedActions[0];
+    const docYear = targetDoc ? targetDoc.year : effectiveYear;
 
     return {
+      documentKey: targetDoc?.documentKey || targetDocKey || "",
+      year: docYear,
       employeeId: emp.id,
       agreementLevel: level,
-      title: `Perjanjian Kinerja ${emp.fullName} - ${year}`,
+      title: `Perjanjian Kinerja ${emp.fullName} - ${docYear}`,
       sourceType: firstRkt?.scope === "Kesekretariatan" ? "RKT Kesekretariatan" : "RKT Instansi",
       sourceRktId: firstRkt?.id || "",
       sourceActionPlanId: firstAction?.id || "",
-      sourceDescription: `Inheritance otomatis dari RKT & RAK Tahun ${year}`,
+      sourceDescription: targetDoc 
+        ? `Inheritance otomatis dari RKT (${targetDoc.rktType} · ${docYear}) & RAK terkait`
+        : `Inheritance otomatis dari RKT & RAK Tahun ${docYear}`,
       objectives: generatedObjectives,
       budgets: generatedBudgets,
       inheritedCount: {
         objectives: objMap.size,
         indicators: generatedObjectives.reduce((acc: number, o: any) => acc + o.indicators.length, 0),
         actions: linkedActions.length,
+        docTitle: targetDoc ? `RKT ${targetDoc.rktType} (${docYear})` : `Tahun ${docYear}`,
       },
     };
   };
-  const applyInheritanceToForm = (targetEmployeeId: number | string) => {
-    const res = buildPkFromInheritance(targetEmployeeId);
+  const applyInheritanceToForm = (targetEmployeeId: number | string, targetDocKey?: string, targetYear?: number) => {
+    const res = buildPkFromInheritance(targetEmployeeId, targetDocKey, targetYear);
     if (!res) return;
     setForm((prev: any) => ({
       ...prev,
+      _docKey: res.documentKey,
+      year: res.year,
       employeeId: res.employeeId,
       agreementLevel: res.agreementLevel,
       title: res.title,
@@ -403,7 +445,7 @@ export default function PerformanceAgreementCenter() {
           )}
           <button className="primary" onClick={() => {
             const initialEmpId = form.employeeId || data.selfEmployeeId || data.employees?.[0]?.id;
-            if (initialEmpId) applyInheritanceToForm(initialEmpId);
+            if (initialEmpId) applyInheritanceToForm(initialEmpId, undefined, Number(form.year || year));
             setEditing(null);
             setShowPk(true);
           }}>
@@ -600,7 +642,7 @@ export default function PerformanceAgreementCenter() {
                                                 e.preventDefault();
                                                 e.stopPropagation();
                                                 setEditing(null);
-                                                applyInheritanceToForm(emp.id);
+                                                applyInheritanceToForm(emp.id, r.documentKey, r.year);
                                                 setShowPk(true);
                                               }}
                                             >
@@ -640,7 +682,7 @@ export default function PerformanceAgreementCenter() {
                                                 e.preventDefault();
                                                 e.stopPropagation();
                                                 setEditing(null);
-                                                applyInheritanceToForm(emp.id);
+                                                applyInheritanceToForm(emp.id, r.documentKey, r.year);
                                                 setShowPk(true);
                                               }}
                                             >
@@ -672,7 +714,7 @@ export default function PerformanceAgreementCenter() {
                                                 e.preventDefault();
                                                 e.stopPropagation();
                                                 setEditing(null);
-                                                applyInheritanceToForm(emp.id);
+                                                applyInheritanceToForm(emp.id, r.documentKey, r.year);
                                                 setShowPk(true);
                                               }}
                                             >
@@ -718,7 +760,7 @@ export default function PerformanceAgreementCenter() {
                                                           e.preventDefault();
                                                           e.stopPropagation();
                                                           setEditing(null);
-                                                          applyInheritanceToForm(emp.id);
+                                                          applyInheritanceToForm(emp.id, r.documentKey, r.year);
                                                           setShowPk(true);
                                                         }}
                                                       >
@@ -974,12 +1016,12 @@ export default function PerformanceAgreementCenter() {
               {inheritedInfo && (
                 <div style={{ padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "6px", fontSize: "9px", color: "#166534", marginBottom: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
                   <span>
-                    ✓ <b>Terisi Otomatis dari RKT & RAK:</b> Terdeteksi {inheritedInfo.actions} RAK & {inheritedInfo.indicators} Indikator Kinerja. Komponen sasaran & nama program telah siap, silakan lengkapi <b>Alokasi Anggaran</b> di bawah.
+                    ✓ <b>Terisi Otomatis dari {inheritedInfo.docTitle || "RKT & RAK"}:</b> Terdeteksi {inheritedInfo.actions} RAK & {inheritedInfo.indicators} Indikator Kinerja ({inheritedInfo.objectives} Sasaran). Komponen sasaran & nama program telah siap, silakan lengkapi <b>Alokasi Anggaran</b> di bawah.
                   </span>
                   <button
                     type="button"
                     style={{ fontSize: "8px", padding: "2px 8px", border: "1px solid #86efac", background: "#fff", borderRadius: "4px", color: "#15803d", cursor: "pointer", fontWeight: 600, flexShrink: 0 }}
-                    onClick={() => applyInheritanceToForm(form.employeeId)}
+                    onClick={() => applyInheritanceToForm(form.employeeId, form._docKey, Number(form.year || year))}
                   >
                     Tarik Ulang
                   </button>
@@ -992,7 +1034,7 @@ export default function PerformanceAgreementCenter() {
                     <button
                       type="button"
                       style={{ fontSize: "8px", padding: "2px 6px", background: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd", borderRadius: "3px", cursor: "pointer", fontWeight: 600 }}
-                      onClick={() => applyInheritanceToForm(form.employeeId)}
+                      onClick={() => applyInheritanceToForm(form.employeeId, form._docKey, Number(form.year || year))}
                     >
                       ⚡ Tarik dari RKT & RAK
                     </button>
@@ -1001,7 +1043,7 @@ export default function PerformanceAgreementCenter() {
                     value={form.employeeId}
                     onChange={(e) => {
                       const nextEmpId = e.target.value;
-                      applyInheritanceToForm(nextEmpId);
+                      applyInheritanceToForm(nextEmpId, form._docKey, Number(form.year || year));
                     }}
                   >
                     {data.employees.map((e: any) => (
