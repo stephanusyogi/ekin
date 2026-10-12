@@ -81,6 +81,7 @@ export default function PerformanceAgreementCenter() {
     [showAction, setShowAction] = useState(false),
     [expandedRakTree, setExpandedRakTree] = useState<Record<string, boolean>>({}),
     [selectedKetuaProgram, setSelectedKetuaProgram] = useState(""),
+    [inheritedInfo, setInheritedInfo] = useState<any>(null),
     [saving, setSaving] = useState(false),
     [toast, setToast] = useState(""),
     [filter, setFilter] = useState("Semua"),
@@ -217,6 +218,128 @@ export default function PerformanceAgreementCenter() {
       employeeIds: currentEmpIds,
     });
   };
+  const buildPkFromInheritance = (targetEmployeeId: number | string) => {
+    const emp = data.employees?.find((e: any) => String(e.id) === String(targetEmployeeId));
+    if (!emp) return null;
+
+    let level = "Staf";
+    const pos = (emp.position || "").toLowerCase();
+    if (pos.includes("ketua")) level = "Ketua";
+    else if (pos.includes("anggota") || pos.includes("komisioner")) level = "Anggota";
+    else if (pos.includes("sekretaris")) level = "Sekretaris";
+    else if (pos.includes("kasubag") || pos.includes("kepala sub")) level = "Subbag";
+
+    // Find all linked actions where picEmployeeId matches targetEmployeeId
+    const linkedActions = (data.actionPlans || []).filter((a: any) => String(a.picEmployeeId) === String(targetEmployeeId));
+    const linkedRktIds = new Set(linkedActions.map((a: any) => Number(a.rktId)).filter(Boolean));
+
+    // Find linked RKT rows
+    let linkedRktRows = (data.rkt || []).filter((r: any) => linkedRktIds.has(Number(r.id)));
+
+    // Fallbacks for Ketua & Sekretaris if no action plans assigned specifically to their ID
+    if (level === "Ketua" && linkedRktRows.length === 0) {
+      linkedRktRows = (data.rkt || []).filter((r: any) => r.rktType === "Ketua" || r.scope === "Instansi");
+    }
+    if (level === "Sekretaris" && linkedRktRows.length === 0) {
+      linkedRktRows = (data.rkt || []).filter((r: any) => r.rktType === "Sekretaris" || r.scope === "Kesekretariatan");
+    }
+
+    // Group by strategic objective
+    const objMap = new Map<string, any>();
+    for (const row of linkedRktRows) {
+      const objName = row.strategicObjective || row.objective || row.programActivity || "Sasaran Kinerja";
+      if (!objMap.has(objName)) {
+        objMap.set(objName, {
+          objective: objName,
+          objectiveType: level === "Staf" ? "Sasaran Kegiatan" : "Sasaran Program (Outcome)",
+          programActivity: row.programActivity || "",
+          indicators: [],
+        });
+      }
+      const current = objMap.get(objName);
+      current.indicators.push({
+        indicator: row.indicator || "Indikator Kinerja",
+        target: row.target || "100",
+        unit: row.unit || "%",
+        targetDisplay: row.unit ? `${row.target} ${row.unit}` : row.target,
+        sourceRktId: row.id,
+        sourceMapping: { objective: "strategicObjective", indicator: "indicator", target: "target" },
+      });
+    }
+
+    // If no RKT rows found but has linked actions
+    if (objMap.size === 0 && linkedActions.length > 0) {
+      for (const act of linkedActions) {
+        objMap.set(act.title, {
+          objective: act.title,
+          objectiveType: level === "Staf" ? "Sasaran Kegiatan" : "Sasaran Program (Outcome)",
+          programActivity: "Program Dukungan Manajemen dan Pelaksanaan Tugas Teknis Lainnya",
+          indicators: [{
+            indicator: `Ketercapaian pelaksanaan ${act.title}`,
+            target: "100",
+            unit: "%",
+            targetDisplay: "100%",
+            sourceRktId: act.rktId || "",
+          }],
+        });
+      }
+    }
+
+    const generatedObjectives = objMap.size > 0 
+      ? Array.from(objMap.values()) 
+      : [blankObjective()];
+
+    // Program activities for budgets
+    const distinctPrograms = Array.from(new Set([
+      ...Array.from(objMap.values()).map((o: any) => o.programActivity).filter(Boolean),
+      ...linkedRktRows.map((r: any) => r.programActivity).filter(Boolean),
+    ]));
+
+    const generatedBudgets = distinctPrograms.length > 0
+      ? distinctPrograms.map((pName: any) => ({
+          programName: pName,
+          outputDescription: level === "Staf" ? (linkedActions[0]?.title || "") : "",
+          amount: 0,
+        }))
+      : [blankBudget()];
+
+    const firstRkt = linkedRktRows[0];
+    const firstAction = linkedActions[0];
+
+    return {
+      employeeId: emp.id,
+      agreementLevel: level,
+      title: `Perjanjian Kinerja ${emp.fullName} - ${year}`,
+      sourceType: firstRkt?.scope === "Kesekretariatan" ? "RKT Kesekretariatan" : "RKT Instansi",
+      sourceRktId: firstRkt?.id || "",
+      sourceActionPlanId: firstAction?.id || "",
+      sourceDescription: `Inheritance otomatis dari RKT & RAK Tahun ${year}`,
+      objectives: generatedObjectives,
+      budgets: generatedBudgets,
+      inheritedCount: {
+        objectives: objMap.size,
+        indicators: generatedObjectives.reduce((acc: number, o: any) => acc + o.indicators.length, 0),
+        actions: linkedActions.length,
+      },
+    };
+  };
+  const applyInheritanceToForm = (targetEmployeeId: number | string) => {
+    const res = buildPkFromInheritance(targetEmployeeId);
+    if (!res) return;
+    setForm((prev: any) => ({
+      ...prev,
+      employeeId: res.employeeId,
+      agreementLevel: res.agreementLevel,
+      title: res.title,
+      sourceType: res.sourceType,
+      sourceRktId: res.sourceRktId,
+      sourceActionPlanId: res.sourceActionPlanId,
+      sourceDescription: res.sourceDescription,
+      objectives: res.objectives,
+      budgets: res.budgets,
+    }));
+    setInheritedInfo(res.inheritedCount);
+  };
   const setObjective = (objectiveIndex: number, key: string, value: any) =>
       setForm({ ...form, objectives: form.objectives.map((x: any, n: number) => n === objectiveIndex ? { ...x, [key]: value } : x) }),
     setNestedIndicator = (objectiveIndex: number, indicatorIndex: number, key: string, value: any) =>
@@ -278,7 +401,12 @@ export default function PerformanceAgreementCenter() {
           {plans.canManage && (
             <button onClick={() => { setSelectedKetuaProgram(""); setRktForm({ year, rktType: "Ketua", programs: [blankRktProgram()], policyOwnerId: plans.employees.find((e:any) => e.position === "Ketua")?.id || "", notes: "", status: "Aktif", documentKey: undefined }); setShowRkt(true); }}>+ RKT</button>
           )}
-          <button className="primary" onClick={() => setShowPk(true)}>
+          <button className="primary" onClick={() => {
+            const initialEmpId = form.employeeId || data.selfEmployeeId || data.employees?.[0]?.id;
+            if (initialEmpId) applyInheritanceToForm(initialEmpId);
+            setEditing(null);
+            setShowPk(true);
+          }}>
             + Buat PK
           </button>
         </div>
@@ -440,10 +568,28 @@ export default function PerformanceAgreementCenter() {
                                     {ketuaEmps.map((emp: any) => {
                                       const isAssigned = assignedEmpIds.includes(String(emp.id));
                                       return (
-                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginLeft: "0.75rem", marginTop: "2px", fontSize: "9px" }}>
-                                          <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
-                                          <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
-                                        </label>
+                                        <div key={emp.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", marginLeft: "0.75rem", marginTop: "2px" }}>
+                                          <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "9px" }}>
+                                            <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
+                                            <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
+                                          </label>
+                                          {isAssigned && (
+                                            <button
+                                              type="button"
+                                              title={`Buat PK untuk ${emp.fullName} dari RKT & RAK ini`}
+                                              style={{ fontSize: "8px", padding: "1px 6px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", borderRadius: "3px", cursor: "pointer", fontWeight: 600 }}
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setEditing(null);
+                                                applyInheritanceToForm(emp.id);
+                                                setShowPk(true);
+                                              }}
+                                            >
+                                              ⚡ Buat PK
+                                            </button>
+                                          )}
+                                        </div>
                                       );
                                     })}
                                   </div>
@@ -462,10 +608,28 @@ export default function PerformanceAgreementCenter() {
                                     {anggotaEmps.map((emp: any) => {
                                       const isAssigned = assignedEmpIds.includes(String(emp.id));
                                       return (
-                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginLeft: "0.75rem", marginTop: "3px", fontSize: "9px" }}>
-                                          <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
-                                          <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
-                                        </label>
+                                        <div key={emp.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", marginLeft: "0.75rem", marginTop: "3px" }}>
+                                          <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "9px" }}>
+                                            <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
+                                            <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
+                                          </label>
+                                          {isAssigned && (
+                                            <button
+                                              type="button"
+                                              title={`Buat PK untuk ${emp.fullName} dari RKT & RAK ini`}
+                                              style={{ fontSize: "8px", padding: "1px 6px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", borderRadius: "3px", cursor: "pointer", fontWeight: 600 }}
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setEditing(null);
+                                                applyInheritanceToForm(emp.id);
+                                                setShowPk(true);
+                                              }}
+                                            >
+                                              ⚡ Buat PK
+                                            </button>
+                                          )}
+                                        </div>
                                       );
                                     })}
                                   </div>
@@ -476,10 +640,28 @@ export default function PerformanceAgreementCenter() {
                                     {sekretarisEmps.map((emp: any) => {
                                       const isAssigned = assignedEmpIds.includes(String(emp.id));
                                       return (
-                                        <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginLeft: "0.75rem", marginTop: "3px", fontSize: "9px" }}>
-                                          <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
-                                          <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
-                                        </label>
+                                        <div key={emp.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", marginLeft: "0.75rem", marginTop: "3px" }}>
+                                          <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "9px" }}>
+                                            <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
+                                            <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
+                                          </label>
+                                          {isAssigned && (
+                                            <button
+                                              type="button"
+                                              title={`Buat PK untuk ${emp.fullName} dari RKT & RAK ini`}
+                                              style={{ fontSize: "8px", padding: "1px 6px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", borderRadius: "3px", cursor: "pointer", fontWeight: 600 }}
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setEditing(null);
+                                                applyInheritanceToForm(emp.id);
+                                                setShowPk(true);
+                                              }}
+                                            >
+                                              ⚡ Buat PK
+                                            </button>
+                                          )}
+                                        </div>
                                       );
                                     })}
 
@@ -504,10 +686,28 @@ export default function PerformanceAgreementCenter() {
                                               {subbagEmps.map((emp: any) => {
                                                 const isAssigned = assignedEmpIds.includes(String(emp.id));
                                                 return (
-                                                  <label key={emp.id} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", marginTop: "2px", fontSize: "9px" }}>
-                                                    <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
-                                                    <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
-                                                  </label>
+                                                  <div key={emp.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", marginTop: "2px" }}>
+                                                    <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "9px" }}>
+                                                      <input type="checkbox" checked={isAssigned} onChange={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, emp.id, isAssigned)} />
+                                                      <span style={{ display: "inline" }}><b>{emp.fullName}</b> <span style={{ color: "#64748b", display: "inline" }}>({emp.position})</span></span>
+                                                    </label>
+                                                    {isAssigned && (
+                                                      <button
+                                                        type="button"
+                                                        title={`Buat PK untuk ${emp.fullName} dari RKT & RAK ini`}
+                                                        style={{ fontSize: "8px", padding: "1px 6px", background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0", borderRadius: "3px", cursor: "pointer", fontWeight: 600 }}
+                                                        onClick={(e) => {
+                                                          e.preventDefault();
+                                                          e.stopPropagation();
+                                                          setEditing(null);
+                                                          applyInheritanceToForm(emp.id);
+                                                          setShowPk(true);
+                                                        }}
+                                                      >
+                                                        ⚡ Buat PK
+                                                      </button>
+                                                    )}
+                                                  </div>
                                                 );
                                               })}
                                             </div>
@@ -751,14 +951,38 @@ export default function PerformanceAgreementCenter() {
             <span>PK BERJENJANG</span>
             <h3>{editing?.type === "edit-pk" ? "Edit Perjanjian Kinerja" : "Buat Perjanjian Kinerja"}</h3>
             <div className="module-form">
+              {inheritedInfo && (
+                <div style={{ padding: "8px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "6px", fontSize: "9px", color: "#166534", marginBottom: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                  <span>
+                    ✓ <b>Terisi Otomatis dari RKT & RAK:</b> Terdeteksi {inheritedInfo.actions} RAK & {inheritedInfo.indicators} Indikator Kinerja. Komponen sasaran & nama program telah siap, silakan lengkapi <b>Alokasi Anggaran</b> di bawah.
+                  </span>
+                  <button
+                    type="button"
+                    style={{ fontSize: "8px", padding: "2px 8px", border: "1px solid #86efac", background: "#fff", borderRadius: "4px", color: "#15803d", cursor: "pointer", fontWeight: 600, flexShrink: 0 }}
+                    onClick={() => applyInheritanceToForm(form.employeeId)}
+                  >
+                    Tarik Ulang
+                  </button>
+                </div>
+              )}
               {data.canManageAll && (
                 <label>
-                  Pegawai
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                    <span>Pegawai</span>
+                    <button
+                      type="button"
+                      style={{ fontSize: "8px", padding: "2px 6px", background: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd", borderRadius: "3px", cursor: "pointer", fontWeight: 600 }}
+                      onClick={() => applyInheritanceToForm(form.employeeId)}
+                    >
+                      ⚡ Tarik dari RKT & RAK
+                    </button>
+                  </div>
                   <select
                     value={form.employeeId}
-                    onChange={(e) =>
-                      setForm({ ...form, employeeId: e.target.value })
-                    }
+                    onChange={(e) => {
+                      const nextEmpId = e.target.value;
+                      applyInheritanceToForm(nextEmpId);
+                    }}
                   >
                     {data.employees.map((e: any) => (
                       <option value={e.id} key={e.id}>
@@ -988,7 +1212,7 @@ export default function PerformanceAgreementCenter() {
               </label>
             </div>
             <div className="modal-actions">
-              <button onClick={() => { setShowPk(false); setEditing(null); }}>Batal</button>
+              <button onClick={() => { setShowPk(false); setEditing(null); setInheritedInfo(null); }}>Batal</button>
               <button
                 className="primary"
                 onClick={() => editing?.type === "edit-pk"
