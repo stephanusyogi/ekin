@@ -92,6 +92,11 @@ export default function PerformanceAgreementCenter() {
     [filter, setFilter] = useState("Semua"),
     [pkTypeFilter, setPkTypeFilter] = useState("Semua"),
     [rktFilter, setRktFilter] = useState("Semua"),
+    [rktViewMode, setRktViewMode] = useState<"matrix" | "cards">("matrix"),
+    [showCommissioners, setShowCommissioners] = useState(true),
+    [showSecretariat, setShowSecretariat] = useState(true),
+    [showAllStaff, setShowAllStaff] = useState(false),
+    [expandedSubbagStaff, setExpandedSubbagStaff] = useState<Record<string, boolean>>({}),
     [viewingActions, setViewingActions] = useState<any>(null),
     [monevTypeFilter, setMonevTypeFilter] = useState("Semua"),
     [monevYearFilter, setMonevYearFilter] = useState(String(year)),
@@ -549,6 +554,114 @@ export default function PerformanceAgreementCenter() {
       return true;
     },
     monevPrintRows = monitorAgreements.flatMap((a:any) => a.evaluations.filter(evaluationMatchesFilter).map((e:any) => ({ a, e, indicator: a.indicators.find((i:any) => i.id === e.indicatorId) })));
+
+  // Organization hierarchy mapping for Matrix Table
+  const allEmps: any[] = plans.employees || data.employees || [];
+  const orgUnits: any[] = plans.units || [];
+  const ketuaEmps = allEmps.filter((e: any) => e.position === "Ketua");
+  const anggotaEmps = allEmps.filter((e: any) => e.position === "Anggota");
+  const sekretarisEmps = allEmps.filter((e: any) => e.position === "Sekretaris");
+
+  const subbagList: string[] = orgUnits.length > 0
+    ? orgUnits.filter((u: any) => u.type === "Subbagian").map((u: any) => u.name)
+    : Array.from(new Set(allEmps.filter((e: any) => e.position !== "Ketua" && e.position !== "Anggota" && e.position !== "Sekretaris").map((e: any) => e.unit || "Lainnya"))).sort();
+
+  const subbagGroups = subbagList.map((subbagName) => {
+    const kasubags = allEmps.filter((e: any) => (e.unit || "Lainnya") === subbagName && (e.position === "Kasubag" || e.position?.toLowerCase().includes("kasubag")));
+    const stafs = allEmps.filter((e: any) => (e.unit || "Lainnya") === subbagName && e.position !== "Kasubag" && !e.position?.toLowerCase().includes("kasubag") && e.position !== "Ketua" && e.position !== "Anggota" && e.position !== "Sekretaris");
+    return { subbagName, kasubags, stafs };
+  });
+
+  type MatrixCol = {
+    id: number;
+    fullName: string;
+    label: string;
+    sub: string;
+    category: "Komisioner" | "Sekretaris" | "Kasubag" | "Staf";
+    subbagName?: string;
+  };
+
+  const toggleSubbagStaff = (subbagName: string) => {
+    setExpandedSubbagStaff((prev) => ({
+      ...prev,
+      [subbagName]: !prev[subbagName],
+    }));
+  };
+
+  const matrixCols: MatrixCol[] = [];
+
+  if (showCommissioners) {
+    ketuaEmps.forEach((e: any) =>
+      matrixCols.push({
+        id: e.id,
+        fullName: e.fullName,
+        label: "Ketua",
+        sub: e.fullName.split(" ")[0],
+        category: "Komisioner",
+      })
+    );
+    anggotaEmps.forEach((e: any, idx: number) =>
+      matrixCols.push({
+        id: e.id,
+        fullName: e.fullName,
+        label: `Anggota ${idx + 1}`,
+        sub: e.fullName.split(" ")[0],
+        category: "Komisioner",
+      })
+    );
+  }
+
+  if (showSecretariat) {
+    sekretarisEmps.forEach((e: any) =>
+      matrixCols.push({
+        id: e.id,
+        fullName: e.fullName,
+        label: "Sekretaris",
+        sub: e.fullName.split(" ")[0],
+        category: "Sekretaris",
+      })
+    );
+    subbagGroups.forEach((sg) => {
+      sg.kasubags.forEach((e: any) =>
+        matrixCols.push({
+          id: e.id,
+          fullName: e.fullName,
+          label: `Kasubag ${sg.subbagName.replace("Subbagian ", "")}`,
+          sub: e.fullName.split(" ")[0],
+          category: "Kasubag",
+          subbagName: sg.subbagName,
+        })
+      );
+      if (showAllStaff || expandedSubbagStaff[sg.subbagName]) {
+        sg.stafs.forEach((e: any, sIdx: number) =>
+          matrixCols.push({
+            id: e.id,
+            fullName: e.fullName,
+            label: `Staf ${sIdx + 1}`,
+            sub: e.fullName.split(" ")[0],
+            category: "Staf",
+            subbagName: sg.subbagName,
+          })
+        );
+      }
+    });
+  } else if (showAllStaff) {
+    subbagGroups.forEach((sg) => {
+      sg.stafs.forEach((e: any, sIdx: number) =>
+        matrixCols.push({
+          id: e.id,
+          fullName: e.fullName,
+          label: `Staf ${sIdx + 1}`,
+          sub: e.fullName.split(" ")[0],
+          category: "Staf",
+          subbagName: sg.subbagName,
+        })
+      );
+    });
+  }
+
+  const activeMatrixCols = matrixCols;
+
   return (
     <section className="pk-page">
       <div className="page-title">
@@ -614,16 +727,334 @@ export default function PerformanceAgreementCenter() {
               <span>Total Indikator</span>
             </article>
           </div>
-          <div className="pk-filter">
-            <label>
-              Jenis RKT
-              <select value={rktFilter} onChange={(e) => setRktFilter(e.target.value)}>
-                {["Semua", "Ketua", "Sekretaris"].map((x) => <option key={x}>{x}</option>)}
-              </select>
-            </label>
+          <div className="rkt-toolbar">
+            <div className="rkt-toolbar-left">
+              <label className="rkt-filter-select">
+                <span>Jenis RKT:</span>
+                <select value={rktFilter} onChange={(e) => setRktFilter(e.target.value)}>
+                  {["Semua", "Ketua", "Sekretaris"].map((x) => <option key={x}>{x}</option>)}
+                </select>
+              </label>
+
+              <div className="rkt-view-toggle">
+                <button
+                  type="button"
+                  className={rktViewMode === "matrix" ? "active" : ""}
+                  onClick={() => setRktViewMode("matrix")}
+                >
+                  📑 Matriks Tabel
+                </button>
+                <button
+                  type="button"
+                  className={rktViewMode === "cards" ? "active" : ""}
+                  onClick={() => setRktViewMode("cards")}
+                >
+                  🗂️ Kartu Hirarki
+                </button>
+              </div>
+            </div>
+
+            {rktViewMode === "matrix" && (
+              <div className="rkt-column-filters">
+                <span className="filter-title">Tampilkan Kolom:</span>
+                <label className="filter-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={showCommissioners}
+                    onChange={(e) => setShowCommissioners(e.target.checked)}
+                  />
+                  <span>Komisioner ({matrixCols.filter(c => c.category === "Komisioner").length})</span>
+                </label>
+                <label className="filter-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={showSecretariat}
+                    onChange={(e) => setShowSecretariat(e.target.checked)}
+                  />
+                  <span>Sekretariat & Kasubag ({matrixCols.filter(c => c.category === "Sekretaris" || c.category === "Kasubag").length})</span>
+                </label>
+                <label className="filter-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={showAllStaff}
+                    onChange={(e) => setShowAllStaff(e.target.checked)}
+                  />
+                  <span>Staf Pelaksana ({matrixCols.filter(c => c.category === "Staf").length})</span>
+                </label>
+              </div>
+            )}
           </div>
-          <div className="rkt-list">
-            {visibleRkt.length ? (
+          {rktViewMode === "matrix" ? (
+            <div className="rkt-matrix-wrap">
+              {visibleRkt.length ? (
+                visibleRkt.map((r: any) => {
+                  return (
+                    <div key={r.documentKey} className="rkt-matrix-card">
+                      <div className="pk-card-head" style={{ marginBottom: "0.75rem" }}>
+                        <div>
+                          <span>
+                            RKT {r.rktType.toUpperCase()} · {r.year}
+                          </span>
+                          <h3>{r.programs.length} Program/Kegiatan · {r.programs.reduce((s:number,p:any) => s + p.objectives.length, 0)} Sasaran</h3>
+                          <p>{r.rktType === "Ketua" ? "Sasaran Strategis" : "Sasaran Program (Outcome) / Sasaran Kegiatan"} · {r.rows.length} Indikator</p>
+                        </div>
+                        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                          <i className={`pk-status ${r.status.toLowerCase()}`}>{r.status}</i>
+                          {plans.canManage && (
+                            <div className="row-actions" style={{ marginTop: 0 }}>
+                              <button
+                                type="button"
+                                className="secondary-action"
+                                onClick={() => {
+                                  const defaultPicId = r.policyOwnerId || (r.rktType === "Sekretaris" ? plans.employees?.find((e: any) => e.position === "Sekretaris")?.id : plans.employees?.find((e: any) => e.position === "Ketua")?.id) || "";
+                                  setActionForm(blankActionForm(r.rows[0]?.id || "", defaultPicId));
+                                  setShowAction(true);
+                                }}
+                              >
+                                + RAK
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRktForm({ documentKey: r.documentKey, year: r.year, rktType: r.rktType, policyOwnerId: r.policyOwnerId || "", notes: r.notes || "", status: r.status, programs: r.programs });
+                                  setShowRkt(true);
+                                }}
+                              >
+                                Edit RKT
+                              </button>
+                              {data.canManageAll && (
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() => request(`/api/work-plans?documentKey=${encodeURIComponent(r.documentKey)}`, {}, "DELETE")}
+                                >
+                                  Hapus
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rkt-matrix-scroll">
+                        <table className="rkt-matrix-table">
+                          <thead>
+                            {/* Grouping Header Row */}
+                            <tr>
+                              <th colSpan={7} className="col-group-title">Informasi Program & Rencana Aksi</th>
+                              {activeMatrixCols.length > 0 && (
+                                <th colSpan={activeMatrixCols.length} className="col-group-title matrix-header-group">
+                                  Matriks Inheritance Aksi Organisasi
+                                </th>
+                              )}
+                              {plans.canManage && <th rowSpan={2} style={{ width: "90px" }}>Aksi</th>}
+                            </tr>
+                            {/* Detailed Columns Header Row */}
+                            <tr>
+                              <th style={{ width: "35px" }}>No</th>
+                              <th style={{ minWidth: "160px" }}>Program</th>
+                              <th style={{ minWidth: "180px" }}>Sasaran Program</th>
+                              <th style={{ minWidth: "200px" }}>Indikator Kinerja</th>
+                              <th style={{ minWidth: "220px" }}>Kegiatan (RAK)</th>
+                              <th style={{ width: "85px" }}>Target</th>
+                              <th style={{ width: "115px" }}>Pagu Anggaran</th>
+                              {activeMatrixCols.map((col) => (
+                                <th key={col.id} className={`col-matrix ${col.category.toLowerCase()}`} title={`${col.label} (${col.category})`}>
+                                  <div className="matrix-col-header">
+                                    <span className="col-name">{col.label}</span>
+                                    <span className="col-sub">{col.sub}</span>
+                                    {col.category === "Kasubag" && col.subbagName && (
+                                      <button
+                                        type="button"
+                                        className="matrix-expand-btn"
+                                        title={expandedSubbagStaff[col.subbagName] ? "Sembunyikan Staf" : "Tampilkan Staf"}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleSubbagStaff(col.subbagName!);
+                                        }}
+                                      >
+                                        {expandedSubbagStaff[col.subbagName] ? "[-] Staf" : "[+] Staf"}
+                                      </button>
+                                    )}
+                                  </div>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {r.programs.map((p: any, pn: number) => {
+                              return p.objectives.map((o: any, on: number) => {
+                                return o.indicators.map((i: any, ix: number) => {
+                                  const indActions = r.actions.filter((a: any) => String(a.rktId) === String(i.id));
+                                  const distinctActionTitles = Array.from(new Set(indActions.map((a: any) => a.title)));
+
+                                  if (distinctActionTitles.length === 0) {
+                                    return (
+                                      <tr key={`ind-${i.id}`}>
+                                        <td className="text-center font-bold">{pn + 1}.{on + 1}.{ix + 1}</td>
+                                        <td className="col-prog">{pn + 1}. {p.programActivity}</td>
+                                        <td className="col-sasaran">{pn + 1}.{on + 1} {o.objective}</td>
+                                        <td className="col-ind">{i.indicator}</td>
+                                        <td className="col-rak text-muted" style={{ fontStyle: "italic" }}>
+                                          Belum ada RAK
+                                          {plans.canManage && (
+                                            <button
+                                              type="button"
+                                              className="matrix-add-rak-btn"
+                                              onClick={() => {
+                                                const defaultPicId = r.policyOwnerId || (r.rktType === "Sekretaris" ? plans.employees?.find((e: any) => e.position === "Sekretaris")?.id : plans.employees?.find((e: any) => e.position === "Ketua")?.id) || "";
+                                                setActionForm(blankActionForm(String(i.id), defaultPicId));
+                                                setShowAction(true);
+                                              }}
+                                            >
+                                              + Tambah RAK
+                                            </button>
+                                          )}
+                                        </td>
+                                        <td className="col-target text-center">{i.target} {i.unit}</td>
+                                        <td className="col-pagu text-right">
+                                          {Number(p.budgetAmount) > 0 ? rupiah(Number(p.budgetAmount)) : "-"}
+                                        </td>
+                                        {activeMatrixCols.map((col) => (
+                                          <td key={col.id} className="col-matrix-cell empty">-</td>
+                                        ))}
+                                        {plans.canManage && <td className="text-center">-</td>}
+                                      </tr>
+                                    );
+                                  }
+
+                                  return distinctActionTitles.map((title: any, actIdx: number) => {
+                                    const sharedActions = indActions.filter((a: any) => a.title === title);
+                                    const firstAct = sharedActions[0];
+                                    const assignedEmpIds = sharedActions.map((a: any) => String(a.picEmployeeId)).filter(Boolean);
+
+                                    return (
+                                      <tr key={`${i.id}-${actIdx}`} className={actIdx > 0 ? "sub-rak-row" : ""}>
+                                        <td className="text-center font-bold">
+                                          {pn + 1}.{on + 1}.{ix + 1}{actIdx > 0 ? `.${actIdx + 1}` : ""}
+                                        </td>
+                                        <td className="col-prog">{pn + 1}. {p.programActivity}</td>
+                                        <td className="col-sasaran">{pn + 1}.{on + 1} {o.objective}</td>
+                                        <td className="col-ind">{i.indicator}</td>
+                                        <td className="col-rak">
+                                          <div className="rak-title-wrap">
+                                            <strong>{title}</strong>
+                                            {firstAct.timelineQuarter && (
+                                              <span className="rak-quarter-badge">{firstAct.timelineQuarter}</span>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="col-target text-center">
+                                          {firstAct.targetQty ? `${firstAct.targetQty} ${firstAct.measurementUnit || i.unit}` : `${i.target} ${i.unit}`}
+                                        </td>
+                                        <td className="col-pagu text-right">
+                                          {Number(firstAct.budgetAmount || p.budgetAmount) > 0
+                                            ? rupiah(Number(firstAct.budgetAmount || p.budgetAmount))
+                                            : "-"}
+                                        </td>
+                                        {activeMatrixCols.map((col) => {
+                                          const isChecked = assignedEmpIds.includes(String(col.id));
+                                          return (
+                                            <td key={col.id} className={`col-matrix-cell ${isChecked ? "checked" : ""}`}>
+                                              <button
+                                                type="button"
+                                                className={`matrix-checkbox-btn ${isChecked ? "active" : ""}`}
+                                                title={`${isChecked ? "Cabut" : "Tugaskan"} aksi ke ${col.fullName} (${col.sub})`}
+                                                onClick={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, col.id, isChecked)}
+                                              >
+                                                {isChecked ? "✓" : ""}
+                                              </button>
+                                              {isChecked && (
+                                                <button
+                                                  type="button"
+                                                  className="matrix-create-pk-mini"
+                                                  title={`Buat PK untuk ${col.fullName}`}
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditing(null);
+                                                    applyInheritanceToForm(col.id, r.documentKey, r.year, firstAct.rktId, firstAct.id);
+                                                    setShowPk(true);
+                                                  }}
+                                                >
+                                                  ⚡
+                                                </button>
+                                              )}
+                                            </td>
+                                          );
+                                        })}
+                                        {plans.canManage && (
+                                          <td className="col-actions text-center">
+                                            <div className="matrix-action-buttons">
+                                              <button
+                                                type="button"
+                                                className="btn-mini-add"
+                                                title="Tambah RAK untuk indikator ini"
+                                                onClick={() => {
+                                                  const defaultPicId = r.policyOwnerId || (r.rktType === "Sekretaris" ? plans.employees?.find((e: any) => e.position === "Sekretaris")?.id : plans.employees?.find((e: any) => e.position === "Ketua")?.id) || "";
+                                                  setActionForm(blankActionForm(String(i.id), defaultPicId));
+                                                  setShowAction(true);
+                                                }}
+                                              >
+                                                +
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="btn-mini-edit"
+                                                title="Edit RAK"
+                                                onClick={() => {
+                                                  setActionForm({
+                                                    id: firstAct.id,
+                                                    rktId: String(firstAct.rktId),
+                                                    title: firstAct.title,
+                                                    activityDescription: firstAct.activityDescription || "",
+                                                    targetQty: String(firstAct.targetQty || 0),
+                                                    measurementUnit: firstAct.measurementUnit || "",
+                                                    budgetAmount: String(firstAct.budgetAmount || 0),
+                                                    picEmployeeId: String(firstAct.picEmployeeId || ""),
+                                                    timelineQuarter: firstAct.timelineQuarter || "TW I",
+                                                    notes: firstAct.notes || ""
+                                                  });
+                                                  setShowAction(true);
+                                                }}
+                                              >
+                                                ✎
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="btn-mini-delete"
+                                                title="Hapus RAK"
+                                                onClick={() => {
+                                                  if (confirm(`Hapus rencana aksi "${firstAct.title}"?`)) {
+                                                    request(`/api/work-plans?actionId=${firstAct.id}`, {}, "DELETE");
+                                                  }
+                                                }}
+                                              >
+                                                ✕
+                                              </button>
+                                            </div>
+                                          </td>
+                                        )}
+                                      </tr>
+                                    );
+                                  });
+                                });
+                              });
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="report-empty">
+                  Belum ada RKT Instansi atau RKT Kesekretariatan.
+                </div>
+              )}
+            </div>
+          ) : rktViewMode === "cards" ? (
+            <div className="rkt-list">
+              {visibleRkt.length ? (
               visibleRkt.map((r: any) => (
               <article key={r.documentKey}>
                 <div className="pk-card-head">
@@ -855,7 +1286,7 @@ export default function PerformanceAgreementCenter() {
 
                                     {/* Subbagian-subbagian di bawah Sekretariat */}
                                     <div style={{ marginTop: "0.35rem", marginLeft: "0.75rem", display: "grid", gap: "0.35rem" }}>
-                                      {subbagUnits.map((subbag: string) => {
+                                      {subbagUnits.map((subbag: any) => {
                                         const subbagEmps = allEmps.filter((e: any) => (e.unit || "Lainnya") === subbag && e.position !== "Ketua" && e.position !== "Anggota" && e.position !== "Sekretaris");
                                         const allChecked = subbagEmps.length > 0 && subbagEmps.every((e: any) => assignedEmpIds.includes(String(e.id)));
 
@@ -932,6 +1363,7 @@ export default function PerformanceAgreementCenter() {
             </div>
           )}
         </div>
+          ) : null}
         </>
       )}
       {tab === "pk" && (

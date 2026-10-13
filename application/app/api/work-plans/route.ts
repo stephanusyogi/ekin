@@ -3,6 +3,7 @@ import { getDb } from "../../../db";
 import { actionPlans, annualWorkPlans, employees, performanceAgreements, performanceIndicators } from "../../../db/schema";
 import { hasSakipOperator, requireAuthorizedUser } from "../../lib/access";
 import { cleanEvidenceLinks, logSecurityEvent } from "../../lib/security";
+import { organizationData } from "../../lib/organization";
 
 const managers = ["super_user", "super_admin", "admin"];
 const flattenPrograms = (p: any) => (Array.isArray(p.programs) ? p.programs : []).flatMap((program: any, programOrder: number) =>
@@ -31,7 +32,10 @@ async function actor(request: Request) {
 export async function GET(request: Request) {
   try {
     const { me, db, self, canManage } = await actor(request);
-    const staff = await db.select().from(employees).orderBy(asc(employees.fullName));
+    const [staff, { units, positions }] = await Promise.all([
+      db.select().from(employees).orderBy(asc(employees.fullName)),
+      organizationData(),
+    ]);
     const plans = await db.select().from(annualWorkPlans).orderBy(asc(annualWorkPlans.year), asc(annualWorkPlans.programOrder), asc(annualWorkPlans.objectiveOrder), asc(annualWorkPlans.indicatorOrder));
     const ids = plans.map((x) => x.id);
     const actions = ids.length ? await db.select().from(actionPlans).where(inArray(actionPlans.rktId, ids)).orderBy(asc(actionPlans.deadline)) : [];
@@ -47,10 +51,22 @@ export async function GET(request: Request) {
       if (!objective) { objective = { order: row.objectiveOrder, objective: row.strategicObjective || row.objective, indicators: [] }; program.objectives.push(objective); }
       objective.indicators.push({ id: row.id, indicator: row.indicator, target: row.target, unit: row.unit, budgetAmount: Number(row.budgetAmount || 0), order: row.indicatorOrder });
     }
-    return Response.json({ canManage, employees: staff.map((e) => ({ id: e.id, fullName: e.fullName, position: e.position, unit: e.unitSubsection })),
+    return Response.json({
+      canManage,
+      units: units.filter((u: any) => u.status === "Aktif"),
+      positions: positions.filter((p: any) => p.status === "Aktif"),
+      employees: staff.map((e) => ({
+        id: e.id,
+        fullName: e.fullName,
+        position: e.position,
+        unit: e.unitSubsection,
+        organizationPositionId: e.organizationPositionId,
+      })),
       plans: plans.map((r) => ({ ...r, owner: staff.find((e) => e.id === r.policyOwnerId), actions: actions.filter((a) => a.rktId === r.id).map((a) => ({ ...a, pic: staff.find((e) => e.id === a.picEmployeeId) })) })),
       documents: [...grouped.values()].map((d) => ({ ...d, owner: staff.find((e) => e.id === d.policyOwnerId), actions: actions.filter((a) => d.rows.some((r: any) => r.id === a.rktId)) })),
-      currentEmployee: self ? { id: self.id, position: self.position } : null, role: me.role });
+      currentEmployee: self ? { id: self.id, position: self.position } : null,
+      role: me.role,
+    });
   } catch { return Response.json({ error: "Akses tidak tersedia" }, { status: 403 }); }
 }
 
