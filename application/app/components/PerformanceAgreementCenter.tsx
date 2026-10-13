@@ -158,25 +158,36 @@ export default function PerformanceAgreementCenter() {
         aj = await a.json(),
         rj = await r.json();
       if (a.ok) {
-        setData(aj);
+        setData({
+          ...aj,
+          employees: aj.employees || [],
+          agreements: aj.agreements || [],
+          rkt: aj.rkt || [],
+          actionPlans: aj.actionPlans || [],
+        });
         setForm((f: any) => ({
           ...f,
           employeeId:
-            f.employeeId || aj.selfEmployeeId || aj.employees[0]?.id || "",
+            f.employeeId || aj.selfEmployeeId || aj.employees?.[0]?.id || "",
         }));
       }
       if (r.ok) {
-        setPlans(rj);
+        setPlans({
+          ...rj,
+          plans: rj.plans || [],
+          employees: rj.employees || [],
+          documents: rj.documents || [],
+        });
         setRktForm((f: any) => ({
           ...f,
           policyOwnerId:
             f.policyOwnerId ||
-            rj.employees.find((e: any) => e.position === "Ketua")?.id ||
+            rj.employees?.find((e: any) => e.position === "Ketua")?.id ||
             "",
         }));
         setActionForm((f: any) => ({
           ...f,
-          rktId: f.rktId || rj.plans[0]?.id || "",
+          rktId: f.rktId || rj.plans?.[0]?.id || "",
         }));
       }
     };
@@ -597,9 +608,9 @@ export default function PerformanceAgreementCenter() {
   (() => {
     // Collect all indicators across filtered agreements
     const items = monitorAgreements.flatMap((a: any) =>
-      a.indicators.map((i: any) => {
+      (a.indicators || []).map((i: any) => {
         // Find matching evaluations for this indicator
-        const evals = a.evaluations.filter((e: any) => e.indicatorId === i.id && evaluationMatchesFilter(e));
+        const evals = (a.evaluations || []).filter((e: any) => e.indicatorId === i.id && evaluationMatchesFilter(e));
         // Also look up associated RKT program & activities
         const rktProg = data.rkt?.find((r: any) => r.id === i.sourceRktId)?.programActivity ||
                         a.budgets?.[0]?.programName ||
@@ -654,7 +665,7 @@ export default function PerformanceAgreementCenter() {
               iIdx: iIdx + 1,
               agreement: it.agreement,
               indicator: it.indicator,
-              programName,
+              programName: progName,
               sasaranName,
               kegiatanRakName: it.kegiatanRakName,
               paguAnggaran: it.paguAnggaran,
