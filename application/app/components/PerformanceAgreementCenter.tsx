@@ -118,6 +118,7 @@ export default function PerformanceAgreementCenter() {
     [monevYearFilter, setMonevYearFilter] = useState(String(year)),
     [monevQuarterFilter, setMonevQuarterFilter] = useState("Semua"),
     [monevUnitFilter, setMonevUnitFilter] = useState("Semua"),
+    [monevViewMode, setMonevViewMode] = useState<"matrix" | "cards">("matrix"),
     [form, setForm] = useState<any>({
       employeeId: "",
       year,
@@ -570,6 +571,121 @@ export default function PerformanceAgreementCenter() {
       return true;
     },
     monevPrintRows = monitorAgreements.flatMap((a:any) => a.evaluations.filter(evaluationMatchesFilter).map((e:any) => ({ a, e, indicator: a.indicators.find((i:any) => i.id === e.indicatorId) })));
+
+  // Flattened row data for Monev Matrix Table with row-merging calculation
+  type MonevTableRow = {
+    key: string;
+    pIdx: number;
+    oIdx: number;
+    iIdx: number;
+    agreement: any;
+    indicator: any;
+    programName: string;
+    sasaranName: string;
+    kegiatanRakName: string;
+    paguAnggaran: number;
+    evaluation: any | null;
+    showProgram: boolean;
+    programSpan: number;
+    showObjective: boolean;
+    objectiveSpan: number;
+    showIndicator: boolean;
+    indicatorSpan: number;
+  };
+
+  const monevTableRows: MonevTableRow[] = [];
+  (() => {
+    // Collect all indicators across filtered agreements
+    const items = monitorAgreements.flatMap((a: any) =>
+      a.indicators.map((i: any) => {
+        // Find matching evaluations for this indicator
+        const evals = a.evaluations.filter((e: any) => e.indicatorId === i.id && evaluationMatchesFilter(e));
+        // Also look up associated RKT program & activities
+        const rktProg = data.rkt?.find((r: any) => r.id === i.sourceRktId)?.programActivity ||
+                        a.budgets?.[0]?.programName ||
+                        "Program Dukungan Manajemen dan Pelaksanaan Tugas Teknis Lainnya";
+        const pagu = a.budgets?.find((b: any) => b.programName === rktProg)?.amount ||
+                     (a.budgetTotal && a.indicators.length ? Math.round(a.budgetTotal / a.indicators.length) : 0);
+        return {
+          agreement: a,
+          indicator: i,
+          programName: rktProg,
+          sasaranName: i.objective || "Sasaran Kinerja",
+          kegiatanRakName: i.targetDisplay || i.sourceDescription || "-",
+          paguAnggaran: pagu,
+          evaluations: evals,
+        };
+      })
+    );
+
+    // Group by programName -> sasaranName -> indicator
+    const progMap = new Map<string, any[]>();
+    items.forEach((item: any) => {
+      if (!progMap.has(item.programName)) progMap.set(item.programName, []);
+      progMap.get(item.programName)!.push(item);
+    });
+
+    let pCount = 0;
+    progMap.forEach((progItems, progName) => {
+      pCount++;
+      const progStartIdx = monevTableRows.length;
+
+      // Group by sasaranName within this program
+      const objMap = new Map<string, any[]>();
+      progItems.forEach((it: any) => {
+        if (!objMap.has(it.sasaranName)) objMap.set(it.sasaranName, []);
+        objMap.get(it.sasaranName)!.push(it);
+      });
+
+      let oCount = 0;
+      objMap.forEach((objItems, sasaranName) => {
+        oCount++;
+        const objStartIdx = monevTableRows.length;
+
+        objItems.forEach((it: any, iIdx: number) => {
+          const indStartIdx = monevTableRows.length;
+          const evalsToRender = it.evaluations.length > 0 ? it.evaluations : [null];
+
+          evalsToRender.forEach((ev: any, evIdx: number) => {
+            monevTableRows.push({
+              key: `monev-row-${it.indicator.id}-${ev ? ev.id : `empty-${evIdx}`}`,
+              pIdx: pCount,
+              oIdx: oCount,
+              iIdx: iIdx + 1,
+              agreement: it.agreement,
+              indicator: it.indicator,
+              programName,
+              sasaranName,
+              kegiatanRakName: it.kegiatanRakName,
+              paguAnggaran: it.paguAnggaran,
+              evaluation: ev,
+              showProgram: false,
+              programSpan: 1,
+              showObjective: false,
+              objectiveSpan: 1,
+              showIndicator: false,
+              indicatorSpan: 1,
+            });
+          });
+
+          if (monevTableRows.length > indStartIdx) {
+            monevTableRows[indStartIdx].showIndicator = true;
+            monevTableRows[indStartIdx].indicatorSpan = monevTableRows.length - indStartIdx;
+          }
+        });
+
+        if (monevTableRows.length > objStartIdx) {
+          monevTableRows[objStartIdx].showObjective = true;
+          monevTableRows[objStartIdx].objectiveSpan = monevTableRows.length - objStartIdx;
+        }
+      });
+
+      if (monevTableRows.length > progStartIdx) {
+        monevTableRows[progStartIdx].showProgram = true;
+        monevTableRows[progStartIdx].programSpan = monevTableRows.length - progStartIdx;
+      }
+    });
+  })();
 
   // Organization hierarchy mapping for Matrix Table
   const allEmps: any[] = plans.employees || data.employees || [];
@@ -1696,79 +1812,347 @@ export default function PerformanceAgreementCenter() {
             <label>Periode<select value={monevTypeFilter} onChange={(e) => setMonevTypeFilter(e.target.value)}><option>Semua</option><option>Bulanan</option><option>Triwulanan</option><option>Tahunan</option></select></label>
             <label>Filter Triwulan<select value={monevQuarterFilter} onChange={(e) => setMonevQuarterFilter(e.target.value)}><option value="Semua">Semua Triwulan</option><option value="Q1">Triwulan 1 (TW 1)</option><option value="Q2">Triwulan 2 (TW 2)</option><option value="Q3">Triwulan 3 (TW 3)</option><option value="Q4">Triwulan 4 (TW 4)</option></select></label>
             <label>Unit/Subbagian<select value={monevUnitFilter} onChange={(e) => setMonevUnitFilter(e.target.value)}><option>Semua</option>{[...new Set(data.agreements.map((a:any) => a.employee?.unitSubsection).filter(Boolean))].map((x:any) => <option key={x}>{x}</option>)}</select></label>
-            <button onClick={() => { setEditing({ type: "print-monev", rows: monevPrintRows }); setTimeout(() => window.print(), 50); }}>Cetak Rekap Monev</button>
+            <div style={{ display: "flex", gap: "4px", background: "#f1f5f9", padding: "3px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+              <button
+                type="button"
+                onClick={() => setMonevViewMode("matrix")}
+                style={{
+                  padding: "6px 11px",
+                  fontSize: "8px",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  background: monevViewMode === "matrix" ? "#168765" : "transparent",
+                  color: monevViewMode === "matrix" ? "#fff" : "#64748b",
+                  transition: "all .15s ease",
+                }}
+              >
+                📊 Tabel Matriks
+              </button>
+              <button
+                type="button"
+                onClick={() => setMonevViewMode("cards")}
+                style={{
+                  padding: "6px 11px",
+                  fontSize: "8px",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  background: monevViewMode === "cards" ? "#168765" : "transparent",
+                  color: monevViewMode === "cards" ? "#fff" : "#64748b",
+                  transition: "all .15s ease",
+                }}
+              >
+                🗂️ Tampilan Kartu
+              </button>
+            </div>
+            <button onClick={() => { setEditing({ type: "print-monev", rows: monevTableRows }); setTimeout(() => window.print(), 50); }}>
+              🖨️ Cetak Rekap Monev
+            </button>
           </div>
-          <div className="monitor-pk-list">
-          {monitorAgreements
-            .flatMap((a: any) => a.indicators.map((i: any) => ({ a, i })))
-            .map(({ a, i }: any) => (
-              <article key={i.id}>
-                <div>
-                  <span>
-                    {a.employee?.fullName} · {a.agreementLevel}
-                  </span>
-                  <h3>{i.objective}</h3>
-                  <p>
-                    {i.indicator} · Target {i.target} {i.unit}
-                  </p>
+
+          {monevViewMode === "matrix" ? (
+            <div className="rkt-matrix-wrap" style={{ marginTop: "10px" }}>
+              <div className="rkt-matrix-card" style={{ padding: "16px 20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "14px", color: "#0f172a", fontWeight: 750 }}>
+                      Matriks Monitoring & Realisasi Kinerja
+                    </h3>
+                    <p style={{ margin: "2px 0 0", fontSize: "9px", color: "#64748b" }}>
+                      Tahun {monevYearFilter} · {monevTypeFilter} {monevQuarterFilter !== "Semua" ? `(${monevQuarterFilter})` : ""} · Unit: {monevUnitFilter} · Total {monevTableRows.length} Baris Indikator/Monev
+                    </p>
+                  </div>
                 </div>
-                <div className="monitor-values">
-                  <b>{i.progress}%</b>
-                  <span>Data monitoring</span>
-                </div>
-                <div className="progress">
-                  <i style={{ width: `${i.progress}%` }} />
-                </div>
-                <div className="monitor-detail">
-                  <span>Realisasi output terakhir: {i.realization || "Belum diisi"}</span>
-                  <span>Riwayat Monev: {a.evaluations.filter((e:any) => e.indicatorId === i.id && evaluationMatchesFilter(e)).length}</span>
-                </div>
-                <div className="row-actions">
-                  {(data.canManageAll || a.employeeId === data.currentEmployee?.id) && (
-                    <button onClick={() => {
-                      const defQ = getDefaultActiveQuarter(Number(a.year || year));
-                      setEditing({
-                        type: "monev",
-                        agreement: a,
-                        indicator: i,
-                        form: initMonevForm(a, i.id, "Triwulanan", defQ),
-                      });
-                    }}>
-                      + Tambah Monev
-                    </button>
-                  )}
-                </div>
-                <div className="monev-history">{a.evaluations.filter((e:any) => e.indicatorId === i.id && evaluationMatchesFilter(e)).map((e:any) => {
-                  const locked = isMonevLocked(e.periodKey);
-                  return (
-                    <section key={e.id} style={locked ? { borderLeft: "4px solid #f87171", background: "#fef8f8" } : {}}>
-                      <header>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <b>{e.periodType} · {periodDetails(e.periodType, e.periodKey).evaluated}</b>
-                          {locked ? (
-                            <span className="monev-lock-badge locked" title="Data pada periode ini sudah dikunci oleh Pimpinan">🔒 Terkunci</span>
-                          ) : (
-                            <span className="monev-lock-badge active" title="Periode masih aktif / terbuka">🟢 Aktif</span>
-                          )}
-                        </div>
-                        <strong>{e.progress}%</strong>
-                      </header>
-                      <p><b>Waktu pengisian:</b> {periodDetails(e.periodType, e.periodKey).submitted}</p>
-                      <div><span>Realisasi Anggaran</span><b>{rupiah(e.budgetRealization)}</b></div>
-                      <p><b>Realisasi Output:</b> {e.outputRealization || "—"}</p><p><b>Permasalahan:</b> {e.problemIdentification || "—"}</p><p><b>Upaya Peningkatan:</b> {e.improvementEffort || "—"}</p><p><b>Kegiatan:</b> {e.completedActivities || "—"}</p><p><b>Keterangan:</b> {e.notes || "—"}</p>
-                      {!!e.evidenceLinks.length && <div className="monev-links">{e.evidenceLinks.map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}
-                      {(data.canManageAll || (a.employeeId === data.currentEmployee?.id && !locked)) && (
-                        <div className="row-actions">
-                          <button onClick={() => setEditing({ type: "monev", agreement: a, indicator: i, form: { ...e, evidenceLinks: e.evidenceLinks.length ? e.evidenceLinks : [""] } })}>Edit</button>
-                          <button className="danger" onClick={() => request(`/api/performance-evaluations?id=${e.id}`, {}, "DELETE")}>Hapus</button>
-                        </div>
+
+                <div className="rkt-matrix-scroll">
+                  <table className="rkt-matrix-table monev-table">
+                    <thead>
+                      <tr>
+                        <th className="sticky-col col-no" style={{ width: "42px", minWidth: "42px" }}>No</th>
+                        <th className="sticky-col col-program" style={{ minWidth: "180px", maxWidth: "230px" }}>Program</th>
+                        <th className="col-sasaran-head" style={{ minWidth: "180px", maxWidth: "230px" }}>Sasaran Program</th>
+                        <th className="col-ind-head" style={{ minWidth: "200px", maxWidth: "250px" }}>Indikator Kinerja</th>
+                        <th className="col-rak-head" style={{ minWidth: "180px", maxWidth: "230px" }}>Kegiatan</th>
+                        <th className="col-target-head" style={{ minWidth: "90px", textAlign: "center" }}>Target</th>
+                        <th className="col-pagu-head" style={{ minWidth: "120px", textAlign: "right" }}>Pagu Anggaran</th>
+                        <th style={{ minWidth: "90px", textAlign: "center", background: "#f0fdf4", color: "#166534" }}>Realisasi Output (%)</th>
+                        <th style={{ minWidth: "200px", maxWidth: "260px" }}>Kegiatan Yang Sudah Dilaksanakan</th>
+                        <th style={{ minWidth: "120px" }}>Link Bukti Dukung</th>
+                        <th style={{ minWidth: "125px", textAlign: "right" }}>Realisasi Anggaran</th>
+                        <th style={{ minWidth: "90px", textAlign: "center" }}>Persentase Anggaran</th>
+                        <th style={{ minWidth: "200px", maxWidth: "260px" }}>Identifikasi Permasalahan dan Kendala</th>
+                        <th style={{ minWidth: "200px", maxWidth: "260px" }}>Upaya Peningkatan Kinerja</th>
+                        <th style={{ minWidth: "95px", textAlign: "center" }}>Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monevTableRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={15} style={{ textAlign: "center", padding: "26px", color: "#64748b" }}>
+                            Belum ada data monitoring dan evaluasi untuk filter yang dipilih.
+                          </td>
+                        </tr>
+                      ) : (
+                        monevTableRows.map((row) => {
+                          const ev = row.evaluation;
+                          const locked = ev ? isMonevLocked(ev.periodKey) : false;
+                          const progress = ev ? Number(ev.progress || 0) : 0;
+                          const budgetReal = ev ? Number(ev.budgetRealization || 0) : 0;
+                          const budgetPercent = row.paguAnggaran > 0 ? ((budgetReal / row.paguAnggaran) * 100).toFixed(1) : "0.0";
+                          const canManage = data.canManageAll || row.agreement.employeeId === data.currentEmployee?.id;
+
+                          return (
+                            <tr key={row.key}>
+                              {/* Kolom 1: No (merged per indikator) */}
+                              {row.showIndicator && (
+                                <td rowSpan={row.indicatorSpan} className="text-center font-bold col-no" style={{ textAlign: "center", verticalAlign: "top", fontWeight: 700 }}>
+                                  {row.pIdx}.{row.oIdx}.{row.iIdx}
+                                </td>
+                              )}
+
+                              {/* Kolom 2: Program (merged per program) */}
+                              {row.showProgram && (
+                                <td rowSpan={row.programSpan} className="col-prog" style={{ verticalAlign: "top", fontWeight: 650, color: "#1e293b" }}>
+                                  {row.programName}
+                                </td>
+                              )}
+
+                              {/* Kolom 3: Sasaran Program (merged per sasaran) */}
+                              {row.showObjective && (
+                                <td rowSpan={row.objectiveSpan} className="col-sasaran" style={{ verticalAlign: "top", color: "#334155" }}>
+                                  {row.sasaranName}
+                                </td>
+                              )}
+
+                              {/* Kolom 4: Indikator Kinerja (merged per indikator) */}
+                              {row.showIndicator && (
+                                <td rowSpan={row.indicatorSpan} className="col-ind" style={{ verticalAlign: "top" }}>
+                                  <div style={{ fontWeight: 600, color: "#0f172a" }}>{row.indicator.indicator}</div>
+                                  <small style={{ color: "#64748b", display: "block", marginTop: "2px" }}>
+                                    {row.agreement.employee?.fullName} ({row.agreement.agreementLevel})
+                                  </small>
+                                </td>
+                              )}
+
+                              {/* Kolom 5: Kegiatan */}
+                              <td style={{ verticalAlign: "top", color: "#475569" }}>
+                                {row.kegiatanRakName}
+                              </td>
+
+                              {/* Kolom 6: Target */}
+                              {row.showIndicator && (
+                                <td rowSpan={row.indicatorSpan} style={{ textAlign: "center", verticalAlign: "top", whiteSpace: "nowrap" }}>
+                                  <b>{row.indicator.target}</b> {row.indicator.unit}
+                                </td>
+                              )}
+
+                              {/* Kolom 7: Pagu Anggaran */}
+                              {row.showIndicator && (
+                                <td rowSpan={row.indicatorSpan} style={{ textAlign: "right", verticalAlign: "top", fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap" }}>
+                                  {rupiah(row.paguAnggaran)}
+                                </td>
+                              )}
+
+                              {/* Kolom 8: Realisasi Output (%) */}
+                              <td style={{ textAlign: "center", verticalAlign: "top" }}>
+                                {ev ? (
+                                  <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center" }}>
+                                    <span style={{ fontWeight: 800, color: "#166534", fontSize: "11px" }}>{progress}%</span>
+                                    <span style={{ fontSize: "7.5px", color: "#64748b" }}>{ev.periodType}</span>
+                                    {locked && <span style={{ fontSize: "7px", color: "#dc2626" }}>🔒 Terkunci</span>}
+                                  </div>
+                                ) : (
+                                  <span style={{ color: "#94a3b8" }}>—</span>
+                                )}
+                              </td>
+
+                              {/* Kolom 9: Kegiatan Yang Sudah Dilaksanakan */}
+                              <td style={{ verticalAlign: "top", fontSize: "8.5px", color: "#334155" }}>
+                                {ev?.completedActivities || "—"}
+                              </td>
+
+                              {/* Kolom 10: Link Bukti Dukung */}
+                              <td style={{ verticalAlign: "top" }}>
+                                {ev?.evidenceLinks?.filter(Boolean).length ? (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                    {ev.evidenceLinks.filter(Boolean).map((link: string, idx: number) => (
+                                      <a
+                                        key={idx}
+                                        href={link}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        style={{ fontSize: "8px", color: "#168765", textDecoration: "underline", wordBreak: "break-all" }}
+                                      >
+                                        Bukti {idx + 1}
+                                      </a>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span style={{ color: "#94a3b8" }}>—</span>
+                                )}
+                              </td>
+
+                              {/* Kolom 11: Realisasi Anggaran */}
+                              <td style={{ textAlign: "right", verticalAlign: "top", fontWeight: 600, color: "#1e293b", whiteSpace: "nowrap" }}>
+                                {ev ? rupiah(budgetReal) : "—"}
+                              </td>
+
+                              {/* Kolom 12: Persentase Anggaran */}
+                              <td style={{ textAlign: "center", verticalAlign: "top" }}>
+                                {ev ? (
+                                  <span style={{ fontWeight: 700, color: Number(budgetPercent) > 100 ? "#b91c1c" : "#168765" }}>
+                                    {budgetPercent}%
+                                  </span>
+                                ) : (
+                                  <span style={{ color: "#94a3b8" }}>—</span>
+                                )}
+                              </td>
+
+                              {/* Kolom 13: Identifikasi Permasalahan dan Kendala */}
+                              <td style={{ verticalAlign: "top", fontSize: "8.5px", color: "#475569" }}>
+                                {ev?.problemIdentification || "—"}
+                              </td>
+
+                              {/* Kolom 14: Upaya Peningkatan Kinerja */}
+                              <td style={{ verticalAlign: "top", fontSize: "8.5px", color: "#475569" }}>
+                                {ev?.improvementEffort || "—"}
+                              </td>
+
+                              {/* Kolom 15: Aksi */}
+                              <td style={{ textAlign: "center", verticalAlign: "middle" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "center" }}>
+                                  {ev ? (
+                                    <>
+                                      {canManage && !locked && (
+                                        <button
+                                          type="button"
+                                          className="btn-mini-edit"
+                                          onClick={() => setEditing({ type: "monev", agreement: row.agreement, indicator: row.indicator, form: { ...ev, evidenceLinks: ev.evidenceLinks?.length ? ev.evidenceLinks : [""] } })}
+                                        >
+                                          Edit
+                                        </button>
+                                      )}
+                                      {canManage && !locked && (
+                                        <button
+                                          type="button"
+                                          className="btn-mini-delete"
+                                          onClick={() => request(`/api/performance-evaluations?id=${ev.id}`, {}, "DELETE")}
+                                        >
+                                          Hapus
+                                        </button>
+                                      )}
+                                      {locked && (
+                                        <span style={{ fontSize: "7.5px", color: "#991b1b", background: "#fef2f2", padding: "1px 5px", borderRadius: "4px" }}>
+                                          Terkunci
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    canManage && (
+                                      <button
+                                        type="button"
+                                        className="btn-mini-add"
+                                        onClick={() => {
+                                          const defQ = getDefaultActiveQuarter(Number(row.agreement.year || year));
+                                          setEditing({
+                                            type: "monev",
+                                            agreement: row.agreement,
+                                            indicator: row.indicator,
+                                            form: initMonevForm(row.agreement, row.indicator.id, "Triwulanan", defQ),
+                                          });
+                                        }}
+                                      >
+                                        + Monev
+                                      </button>
+                                    )
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
-                    </section>
-                  );
-                })}</div>
-              </article>
-            ))}
-          </div>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="monitor-pk-list">
+              {monitorAgreements
+                .flatMap((a: any) => a.indicators.map((i: any) => ({ a, i })))
+                .map(({ a, i }: any) => (
+                  <article key={i.id}>
+                    <div>
+                      <span>
+                        {a.employee?.fullName} · {a.agreementLevel}
+                      </span>
+                      <h3>{i.objective}</h3>
+                      <p>
+                        {i.indicator} · Target {i.target} {i.unit}
+                      </p>
+                    </div>
+                    <div className="monitor-values">
+                      <b>{i.progress}%</b>
+                      <span>Data monitoring</span>
+                    </div>
+                    <div className="progress">
+                      <i style={{ width: `${i.progress}%` }} />
+                    </div>
+                    <div className="monitor-detail">
+                      <span>Realisasi output terakhir: {i.realization || "Belum diisi"}</span>
+                      <span>Riwayat Monev: {a.evaluations.filter((e:any) => e.indicatorId === i.id && evaluationMatchesFilter(e)).length}</span>
+                    </div>
+                    <div className="row-actions">
+                      {(data.canManageAll || a.employeeId === data.currentEmployee?.id) && (
+                        <button onClick={() => {
+                          const defQ = getDefaultActiveQuarter(Number(a.year || year));
+                          setEditing({
+                            type: "monev",
+                            agreement: a,
+                            indicator: i,
+                            form: initMonevForm(a, i.id, "Triwulanan", defQ),
+                          });
+                        }}>
+                          + Tambah Monev
+                        </button>
+                      )}
+                    </div>
+                    <div className="monev-history">{a.evaluations.filter((e:any) => e.indicatorId === i.id && evaluationMatchesFilter(e)).map((e:any) => {
+                      const locked = isMonevLocked(e.periodKey);
+                      return (
+                        <section key={e.id} style={locked ? { borderLeft: "4px solid #f87171", background: "#fef8f8" } : {}}>
+                          <header>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <b>{e.periodType} · {periodDetails(e.periodType, e.periodKey).evaluated}</b>
+                              {locked ? (
+                                <span className="monev-lock-badge locked" title="Data pada periode ini sudah dikunci oleh Pimpinan">🔒 Terkunci</span>
+                              ) : (
+                                <span className="monev-lock-badge active" title="Periode masih aktif / terbuka">🟢 Aktif</span>
+                              )}
+                            </div>
+                            <strong>{e.progress}%</strong>
+                          </header>
+                          <p><b>Waktu pengisian:</b> {periodDetails(e.periodType, e.periodKey).submitted}</p>
+                          <div><span>Realisasi Anggaran</span><b>{rupiah(e.budgetRealization)}</b></div>
+                          <p><b>Realisasi Output:</b> {e.outputRealization || "—"}</p><p><b>Permasalahan:</b> {e.problemIdentification || "—"}</p><p><b>Upaya Peningkatan:</b> {e.improvementEffort || "—"}</p><p><b>Kegiatan:</b> {e.completedActivities || "—"}</p><p><b>Keterangan:</b> {e.notes || "—"}</p>
+                          {!!e.evidenceLinks.length && <div className="monev-links">{e.evidenceLinks.map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}
+                          {(data.canManageAll || (a.employeeId === data.currentEmployee?.id && !locked)) && (
+                            <div className="row-actions">
+                              <button onClick={() => setEditing({ type: "monev", agreement: a, indicator: i, form: { ...e, evidenceLinks: e.evidenceLinks.length ? e.evidenceLinks : [""] } })}>Edit</button>
+                              <button className="danger" onClick={() => request(`/api/performance-evaluations?id=${e.id}`, {}, "DELETE")}>Hapus</button>
+                            </div>
+                          )}
+                        </section>
+                      );
+                    })}</div>
+                  </article>
+                ))}
+            </div>
+          )}
         </div>
       )}
       {showPk && (
@@ -2560,9 +2944,89 @@ export default function PerformanceAgreementCenter() {
         </div>
       )}
       {editing?.type === "print-monev" && <article className="monev-print-sheet">
-        <h1>REKAP MONITORING DAN EVALUASI KINERJA</h1><p>Tahun {monevYearFilter} · {monevTypeFilter} · Unit {monevUnitFilter}</p>
-        <table><thead><tr><th>No.</th><th>Pegawai/Unit</th><th>Indikator</th><th>Periode</th><th>Progress</th><th>Realisasi Anggaran</th><th>Realisasi Output</th><th>Permasalahan</th><th>Upaya Peningkatan</th><th>Kegiatan</th><th>Bukti</th><th>Keterangan</th></tr></thead>
-        <tbody>{editing.rows.map((row:any,n:number) => <tr key={row.e.id}><td>{n + 1}</td><td>{row.a.employee?.fullName}<br />{row.a.employee?.unitSubsection}</td><td>{row.indicator?.indicator}</td><td>{row.e.periodType}<br />Evaluasi: {periodDetails(row.e.periodType, row.e.periodKey).evaluated}<br />Pengisian: {periodDetails(row.e.periodType, row.e.periodKey).submitted}</td><td>{row.e.progress}%</td><td>{rupiah(row.e.budgetRealization)}</td><td>{row.e.outputRealization || "—"}</td><td>{row.e.problemIdentification || "—"}</td><td>{row.e.improvementEffort || "—"}</td><td>{row.e.completedActivities || "—"}</td><td>{row.e.evidenceLinks.join("\n") || "—"}</td><td>{row.e.notes || "—"}</td></tr>)}</tbody></table>
+        <h1>REKAP MONITORING DAN EVALUASI KINERJA</h1>
+        <p>Tahun {monevYearFilter} · {monevTypeFilter} {monevQuarterFilter !== "Semua" ? `(${monevQuarterFilter})` : ""} · Unit: {monevUnitFilter}</p>
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: "24px" }}>No</th>
+              <th>Program</th>
+              <th>Sasaran Program</th>
+              <th>Indikator Kinerja</th>
+              <th>Kegiatan</th>
+              <th>Target</th>
+              <th>Pagu Anggaran</th>
+              <th>Realisasi Output (%)</th>
+              <th>Kegiatan Yang Sudah Dilaksanakan</th>
+              <th>Link Bukti Dukung</th>
+              <th>Realisasi Anggaran</th>
+              <th>Persentase Anggaran</th>
+              <th>Identifikasi Permasalahan dan Kendala</th>
+              <th>Upaya Peningkatan Kinerja</th>
+            </tr>
+          </thead>
+          <tbody>
+            {editing.rows.map((row: any) => {
+              const ev = row.evaluation;
+              const progress = ev ? Number(ev.progress || 0) : 0;
+              const budgetReal = ev ? Number(ev.budgetRealization || 0) : 0;
+              const budgetPercent = row.paguAnggaran > 0 ? ((budgetReal / row.paguAnggaran) * 100).toFixed(1) : "0.0";
+
+              return (
+                <tr key={row.key}>
+                  {row.showIndicator && (
+                    <td rowSpan={row.indicatorSpan} style={{ textAlign: "center", fontWeight: "bold" }}>
+                      {row.pIdx}.{row.oIdx}.{row.iIdx}
+                    </td>
+                  )}
+                  {row.showProgram && (
+                    <td rowSpan={row.programSpan} style={{ fontWeight: 600 }}>
+                      {row.programName}
+                    </td>
+                  )}
+                  {row.showObjective && (
+                    <td rowSpan={row.objectiveSpan}>
+                      {row.sasaranName}
+                    </td>
+                  )}
+                  {row.showIndicator && (
+                    <td rowSpan={row.indicatorSpan}>
+                      <b>{row.indicator.indicator}</b>
+                      <br />
+                      <small>{row.agreement?.employee?.fullName}</small>
+                    </td>
+                  )}
+                  <td>{row.kegiatanRakName}</td>
+                  {row.showIndicator && (
+                    <td rowSpan={row.indicatorSpan} style={{ textAlign: "center" }}>
+                      {row.indicator.target} {row.indicator.unit}
+                    </td>
+                  )}
+                  {row.showIndicator && (
+                    <td rowSpan={row.indicatorSpan} style={{ textAlign: "right" }}>
+                      {rupiah(row.paguAnggaran)}
+                    </td>
+                  )}
+                  <td style={{ textAlign: "center", fontWeight: "bold" }}>
+                    {ev ? `${progress}%` : "—"}
+                  </td>
+                  <td>{ev?.completedActivities || "—"}</td>
+                  <td style={{ fontSize: "5pt" }}>
+                    {ev?.evidenceLinks?.filter(Boolean).join("\n") || "—"}
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    {ev ? rupiah(budgetReal) : "—"}
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    {ev ? `${budgetPercent}%` : "—"}
+                  </td>
+                  <td>{ev?.problemIdentification || "—"}</td>
+                  <td>{ev?.improvementEffort || "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </article>}
       {editing && !editing.type && (
         <article className="pk-print-sheet">
