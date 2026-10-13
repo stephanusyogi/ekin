@@ -117,6 +117,22 @@ const Icon = ({ name }: { name: string }) => {
     ),
     plus: <path d="M12 5v14M5 12h14" />,
     arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
+    chevronLeft: <path d="M15 18l-6-6 6-6" />,
+    chevronRight: <path d="M9 18l6-6-6-6" />,
+    sidebarToggle: (
+      <>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M9 3v18" />
+        <path d="M14 9l-3 3 3 3" />
+      </>
+    ),
+    sidebarOpen: (
+      <>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M9 3v18" />
+        <path d="M13 15l3-3-3-3" />
+      </>
+    ),
   };
   return (
     <svg
@@ -226,6 +242,40 @@ export default function Home() {
   >("loading");
   const [accessMessage, setAccessMessage] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ekin_sidebar_collapsed");
+      if (saved !== null) {
+        setSidebarCollapsed(saved === "true");
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("ekin_sidebar_collapsed", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === "input" || tag === "textarea") return;
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const notify = (message: string) => {
     setToast(message);
     setTimeout(() => setToast(""), 2400);
@@ -699,13 +749,33 @@ export default function Home() {
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
+      <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="brand">
-          <div className="brandmark">e</div>
-          <div>
-            <b>e Kinerja</b>
-            <span>Kinerja Pegawai</span>
+          <div className="brand-main">
+            <div
+              className="brandmark"
+              onClick={() => {
+                if (sidebarCollapsed) toggleSidebar();
+              }}
+              title={sidebarCollapsed ? "Klik untuk membuka menu sidebar" : "e Kinerja"}
+              style={sidebarCollapsed ? { cursor: "pointer" } : undefined}
+            >
+              e
+            </div>
+            <div className="brand-text">
+              <b>e Kinerja</b>
+              <span>Kinerja Pegawai</span>
+            </div>
           </div>
+          <button
+            type="button"
+            className="sidebar-collapse-btn"
+            onClick={toggleSidebar}
+            aria-label="Ciutkan menu sidebar"
+            title="Ciutkan menu sidebar"
+          >
+            <Icon name="chevronLeft" />
+          </button>
         </div>
         <nav aria-label="Navigasi utama">
           <p>MENU UTAMA</p>
@@ -713,6 +783,8 @@ export default function Home() {
             <button
               key={label}
               className={active === label ? "nav-item active" : "nav-item"}
+              data-tooltip={label}
+              title={sidebarCollapsed ? label : undefined}
               onClick={() => {
                 setActive(label);
                 notify(`${label} dibuka`);
@@ -736,7 +808,22 @@ export default function Home() {
           </small>
         </div>
         <div className="profile" style={{ position: "relative" }}>
-          <div className="avatar">
+          <div
+            className="avatar"
+            tabIndex={sidebarCollapsed ? 0 : undefined}
+            role={sidebarCollapsed ? "button" : undefined}
+            aria-label="Profil pengguna"
+            onClick={() => {
+              if (sidebarCollapsed) setProfileMenuOpen((v) => !v);
+            }}
+            onBlur={() => {
+              if (sidebarCollapsed) {
+                setTimeout(() => setProfileMenuOpen(false), 150);
+              }
+            }}
+            style={sidebarCollapsed ? { cursor: "pointer" } : undefined}
+            title={sidebarCollapsed ? `${currentName} (Klik untuk opsi)` : undefined}
+          >
             {currentName
               .split(" ")
               .slice(0, 2)
@@ -744,7 +831,7 @@ export default function Home() {
               .join("")
               .toUpperCase()}
           </div>
-          <div>
+          <div className="profile-info">
             <b>{currentName}</b>
             <span>
               {isSystemOwner
@@ -753,6 +840,7 @@ export default function Home() {
             </span>
           </div>
           <button
+            className="profile-menu-btn"
             aria-label="Menu profil"
             aria-expanded={profileMenuOpen}
             onClick={() => setProfileMenuOpen((v) => !v)}
@@ -764,8 +852,9 @@ export default function Home() {
               role="menu"
               style={{
                 position: "absolute",
-                bottom: "calc(100% + 8px)",
-                right: 0,
+                ...(sidebarCollapsed
+                  ? { bottom: 0, left: "calc(100% + 12px)" }
+                  : { bottom: "calc(100% + 8px)", right: 0 }),
                 minWidth: 180,
                 background: "var(--surface, #fff)",
                 border: "1px solid var(--border, #e2e8f0)",
@@ -804,9 +893,20 @@ export default function Home() {
           )}
         </div>
       </aside>
-      <section className="workspace">
+      <section className={`workspace ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
         <header>
-          <b className="mobile-brand">e Kinerja</b>
+          <div className="header-left">
+            <button
+              type="button"
+              className="sidebar-toggle-btn"
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? "Buka menu sidebar (Ctrl+B)" : "Tutup menu sidebar (Ctrl+B)"}
+              title={sidebarCollapsed ? "Buka menu sidebar (Ctrl+B)" : "Tutup menu sidebar (Ctrl+B)"}
+            >
+              <Icon name={sidebarCollapsed ? "sidebarOpen" : "sidebarToggle"} />
+            </button>
+            <b className="mobile-brand">e Kinerja</b>
+          </div>
           <div className="header-actions">
             <button
               className="icon-button"
