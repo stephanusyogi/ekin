@@ -851,13 +851,13 @@ export default function PerformanceAgreementCenter() {
                             </tr>
                             {/* Detailed Columns Header Row */}
                             <tr>
-                              <th style={{ width: "35px" }}>No</th>
-                              <th style={{ minWidth: "160px" }}>Program</th>
-                              <th style={{ minWidth: "180px" }}>Sasaran Program</th>
-                              <th style={{ minWidth: "200px" }}>Indikator Kinerja</th>
-                              <th style={{ minWidth: "220px" }}>Kegiatan (RAK)</th>
-                              <th style={{ width: "85px" }}>Target</th>
-                              <th style={{ width: "115px" }}>Pagu Anggaran</th>
+                              <th className="sticky-col col-no">No</th>
+                              <th className="sticky-col col-program">Program</th>
+                              <th className="col-sasaran-head">Sasaran Program</th>
+                              <th className="col-ind-head">Indikator Kinerja</th>
+                              <th className="col-rak-head">Kegiatan (RAK)</th>
+                              <th className="col-target-head">Target</th>
+                              <th className="col-pagu-head">Pagu Anggaran</th>
                               {activeMatrixCols.map((col) => (
                                 <th key={col.id} className={`col-matrix ${col.category.toLowerCase()}`} title={`${col.label} (${col.category})`}>
                                   <div className="matrix-col-header">

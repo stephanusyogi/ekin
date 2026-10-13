@@ -80,27 +80,34 @@
 .rkt-column-filters label{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
 .rkt-matrix-wrap{display:grid;gap:18px}
 .rkt-matrix-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 24px;box-shadow:0 4px 20px rgba(0,0,0,.03)}
-.rkt-matrix-scroll{overflow-x:auto;overflow-y:visible;border:1px solid #e2e8f0;border-radius:10px;margin-top:6px;background:#fff;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#94a3b8 #f1f5f9;position:relative;max-width:100%}
-.rkt-matrix-scroll::-webkit-scrollbar{height:8px}
-.rkt-matrix-scroll::-webkit-scrollbar-track{background:#f1f5f9;border-radius:4px}
-.rkt-matrix-scroll::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:4px}
-.rkt-matrix-scroll::-webkit-scrollbar-thumb:hover{background:#64748b}
-.rkt-matrix-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-size:10px;color:#1e293b}
+.rkt-matrix-scroll{overflow-x:scroll;overflow-y:visible;border:1px solid #cbd5e1;border-radius:10px;margin-top:8px;background:#fff;-webkit-overflow-scrolling:touch;scrollbar-width:auto;scrollbar-color:#64748b #f1f5f9;position:relative;width:100%;max-width:100%}
+.rkt-matrix-scroll::-webkit-scrollbar{height:12px;background:#f1f5f9}
+.rkt-matrix-scroll::-webkit-scrollbar-track{background:#f1f5f9;border-radius:6px;border:1px solid #e2e8f0}
+.rkt-matrix-scroll::-webkit-scrollbar-thumb{background:#64748b;border-radius:6px;border:2px solid #f1f5f9}
+.rkt-matrix-scroll::-webkit-scrollbar-thumb:hover{background:#334155}
+.rkt-matrix-table{width:max-content;min-width:1400px;border-collapse:separate;border-spacing:0;font-size:10px;color:#1e293b}
 .rkt-matrix-table th,.rkt-matrix-table td{padding:10px 14px;border-bottom:1px solid #eef2f6;border-right:1px solid #f1f5f9;vertical-align:middle}
 .rkt-matrix-table th{background:#f8fafc;font-weight:700;text-align:center;white-space:nowrap;position:sticky;top:0;z-index:10;padding:11px 14px}
 .rkt-matrix-table th.col-group-title{background:#f1f5f9;color:#334155;font-size:9.5px;letter-spacing:.03em;border-bottom:1px solid #cbd5e1}
 .rkt-matrix-table th.matrix-header-group{background:#ecfdf5;color:#065f46;border-bottom:2px solid #a7f3d0}
-.rkt-matrix-table th.col-matrix{min-width:76px;padding:7px 8px}
+.rkt-matrix-table .col-no{width:45px;min-width:45px;text-align:center}
+.rkt-matrix-table .col-program{min-width:220px;max-width:260px}
+.rkt-matrix-table .col-sasaran-head,.rkt-matrix-table .col-sasaran{min-width:220px;max-width:260px}
+.rkt-matrix-table .col-ind-head,.rkt-matrix-table .col-ind{min-width:240px;max-width:280px}
+.rkt-matrix-table .col-rak-head,.rkt-matrix-table .col-rak{min-width:260px;max-width:320px}
+.rkt-matrix-table .col-target-head,.rkt-matrix-table .col-target{min-width:95px;text-align:center}
+.rkt-matrix-table .col-pagu-head,.rkt-matrix-table .col-pagu{min-width:130px;text-align:right}
+.rkt-matrix-table th.col-matrix{min-width:82px;padding:7px 8px}
 .rkt-matrix-table th.col-matrix.komisioner{background:#fefce8;color:#854d0e;border-bottom:2px solid #fef08a}
 .rkt-matrix-table th.col-matrix.sekretaris{background:#ecfdf5;color:#065f46;border-bottom:2px solid #a7f3d0}
 .rkt-matrix-table th.col-matrix.kasubag{background:#f0fdfa;color:#115e59;border-bottom:2px solid #99f6e4}
 .rkt-matrix-table th.col-matrix.staf{background:#f0f9ff;color:#075985;border-bottom:2px solid #bae6fd}
 .matrix-col-header{display:flex;flex-direction:column;align-items:center;gap:2px}
-.matrix-col-header .col-name{font-weight:750;font-size:9.5px}
-.matrix-col-header .col-sub{font-size:8px;color:#64748b;font-weight:500}
+.matrix-col-header .col-name{font-weight:750;font-size:9.5px;white-space:nowrap}
+.matrix-col-header .col-sub{font-size:8px;color:#64748b;font-weight:500;white-space:nowrap}
 .matrix-expand-btn{margin-top:3px;font-size:7.5px;padding:1px 5px;border-radius:4px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-weight:700}
 .rkt-matrix-table tr:hover td{background:#f8fafc}
-.rkt-matrix-table td.col-matrix-cell{text-align:center;padding:7px 6px!important;min-width:68px}
+.rkt-matrix-table td.col-matrix-cell{text-align:center;padding:7px 6px!important;min-width:76px}
 .rkt-matrix-table td.col-matrix-cell.checked{background:#f0fdf4}
 .matrix-checkbox-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-size:11px;font-weight:700;color:#168765;transition:all .15s ease}
 .matrix-checkbox-btn:hover{border-color:#168765;transform:scale(1.08)}
