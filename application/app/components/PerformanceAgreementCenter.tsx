@@ -55,6 +55,22 @@ const previousMonev = (agreement: any, indicatorId: number, form: any) => {
     .filter((item: any) => !currentOrder || periodOrder(item.periodType, item.periodKey) < currentOrder)
     .sort((a: any, b: any) => periodOrder(b.periodType, b.periodKey) - periodOrder(a.periodType, a.periodKey))[0] || null;
 };
+const initMonevForm = (agreement: any, indicatorId: number, periodType: string, periodKey: string) => {
+  const blank = blankMonev();
+  const draftForm = { ...blank, periodType, periodKey };
+  const prev = previousMonev(agreement, indicatorId, draftForm);
+  if (!prev) return draftForm;
+  return {
+    ...draftForm,
+    progress: prev.progress || 0,
+    budgetRealization: prev.budgetRealization || 0,
+    outputRealization: prev.outputRealization || "",
+    problemIdentification: prev.problemIdentification || "",
+    improvementEffort: prev.improvementEffort || "",
+    completedActivities: prev.completedActivities || "",
+    notes: prev.notes || "",
+  };
+};
 const blankRktIndicator = () => ({ indicator: "", target: "", unit: "" });
 const blankRktObjective = () => ({ objective: "", indicators: [blankRktIndicator()] });
 const blankRktProgram = () => ({ programActivity: "", budgetAmount: 0, objectives: [blankRktObjective()] });
@@ -1709,16 +1725,15 @@ export default function PerformanceAgreementCenter() {
                 </div>
                 <div className="row-actions">
                   {(data.canManageAll || a.employeeId === data.currentEmployee?.id) && (
-                    <button onClick={() => setEditing({
-                      type: "monev",
-                      agreement: a,
-                      indicator: i,
-                      form: {
-                        ...blankMonev(),
-                        periodType: "Triwulanan",
-                        periodKey: getDefaultActiveQuarter(Number(a.year || year)),
-                      }
-                    })}>
+                    <button onClick={() => {
+                      const defQ = getDefaultActiveQuarter(Number(a.year || year));
+                      setEditing({
+                        type: "monev",
+                        agreement: a,
+                        indicator: i,
+                        form: initMonevForm(a, i.id, "Triwulanan", defQ),
+                      });
+                    }}>
                       + Tambah Monev
                     </button>
                   )}
@@ -2473,9 +2488,24 @@ export default function PerformanceAgreementCenter() {
             <h3>{editing.indicator.indicator}</h3>
             <div className="module-form">
               <div className="pk-form-grid">
-                <label>Jenis Periode<select value={editing.form.periodType} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, periodType: e.target.value, periodKey: "" } })}><option>Bulanan</option><option>Triwulanan</option><option>Tahunan</option></select></label>
+                <label>Jenis Periode<select value={editing.form.periodType} onChange={(e) => {
+                  const newType = e.target.value;
+                  if (!editing.form.id) {
+                    setEditing({ ...editing, form: { ...editing.form, periodType: newType, periodKey: "" } });
+                  } else {
+                    setEditing({ ...editing, form: { ...editing.form, periodType: newType, periodKey: "" } });
+                  }
+                }}><option>Bulanan</option><option>Triwulanan</option><option>Tahunan</option></select></label>
                 <label>Periode yang Dievaluasi
-                  <select value={editing.form.periodKey} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, periodKey: e.target.value } })}>
+                  <select value={editing.form.periodKey} onChange={(e) => {
+                    const newKey = e.target.value;
+                    if (!editing.form.id && newKey) {
+                      const carried = initMonevForm(editing.agreement, editing.indicator.id, editing.form.periodType, newKey);
+                      setEditing({ ...editing, form: carried });
+                    } else {
+                      setEditing({ ...editing, form: { ...editing.form, periodKey: newKey } });
+                    }
+                  }}>
                     <option value="">Pilih periode</option>
                     {editing.form.periodType === "Bulanan" && monthlyPeriods.map((month) => {
                       const pKey = `${editing.agreement.year}-${String(month).padStart(2, "0")}`;
