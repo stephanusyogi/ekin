@@ -882,20 +882,154 @@ export default function PerformanceAgreementCenter() {
                             </tr>
                           </thead>
                           <tbody>
-                            {r.programs.map((p: any, pn: number) => {
-                              return p.objectives.map((o: any, on: number) => {
-                                return o.indicators.map((i: any, ix: number) => {
-                                  const indActions = r.actions.filter((a: any) => String(a.rktId) === String(i.id));
-                                  const distinctActionTitles = Array.from(new Set(indActions.map((a: any) => a.title)));
+                            {(() => {
+                              // Flatten and compute rowSpan for Program, Sasaran, and Indikator
+                              type TableRow = {
+                                key: string;
+                                pIdx: number;
+                                oIdx: number;
+                                iIdx: number;
+                                actIdx: number;
+                                program: any;
+                                objective: any;
+                                indicator: any;
+                                actionTitle: string | null;
+                                firstAct: any | null;
+                                assignedEmpIds: string[];
+                                showProgram: boolean;
+                                programSpan: number;
+                                showObjective: boolean;
+                                objectiveSpan: number;
+                                showIndicator: boolean;
+                                indicatorSpan: number;
+                              };
 
-                                  if (distinctActionTitles.length === 0) {
-                                    return (
-                                      <tr key={`ind-${i.id}`}>
-                                        <td className="text-center font-bold">{pn + 1}.{on + 1}.{ix + 1}</td>
-                                        <td className="col-prog">{pn + 1}. {p.programActivity}</td>
-                                        <td className="col-sasaran">{pn + 1}.{on + 1} {o.objective}</td>
-                                        <td className="col-ind">{i.indicator}</td>
-                                        <td className="col-rak text-muted" style={{ fontStyle: "italic" }}>
+                              const rows: TableRow[] = [];
+
+                              r.programs.forEach((p: any, pn: number) => {
+                                const progStartIdx = rows.length;
+
+                                p.objectives.forEach((o: any, on: number) => {
+                                  const objStartIdx = rows.length;
+
+                                  o.indicators.forEach((i: any, ix: number) => {
+                                    const indStartIdx = rows.length;
+                                    const indActions = r.actions.filter((a: any) => String(a.rktId) === String(i.id));
+                                    const distinctActionTitles = Array.from(new Set(indActions.map((a: any) => a.title)));
+
+                                    if (distinctActionTitles.length === 0) {
+                                      rows.push({
+                                        key: `ind-${i.id}`,
+                                        pIdx: pn,
+                                        oIdx: on,
+                                        iIdx: ix,
+                                        actIdx: 0,
+                                        program: p,
+                                        objective: o,
+                                        indicator: i,
+                                        actionTitle: null,
+                                        firstAct: null,
+                                        assignedEmpIds: [],
+                                        showProgram: false,
+                                        programSpan: 1,
+                                        showObjective: false,
+                                        objectiveSpan: 1,
+                                        showIndicator: true,
+                                        indicatorSpan: 1,
+                                      });
+                                    } else {
+                                      distinctActionTitles.forEach((title: any, aIdx: number) => {
+                                        const sharedActions = indActions.filter((a: any) => a.title === title);
+                                        const firstAct = sharedActions[0];
+                                        const assignedEmpIds = sharedActions.map((a: any) => String(a.picEmployeeId)).filter(Boolean);
+
+                                        rows.push({
+                                          key: `${i.id}-${aIdx}`,
+                                          pIdx: pn,
+                                          oIdx: on,
+                                          iIdx: ix,
+                                          actIdx: aIdx,
+                                          program: p,
+                                          objective: o,
+                                          indicator: i,
+                                          actionTitle: title,
+                                          firstAct,
+                                          assignedEmpIds,
+                                          showProgram: false,
+                                          programSpan: 1,
+                                          showObjective: false,
+                                          objectiveSpan: 1,
+                                          showIndicator: aIdx === 0,
+                                          indicatorSpan: distinctActionTitles.length,
+                                        });
+                                      });
+                                    }
+
+                                    // Set indicator span on the first row of indicator
+                                    if (rows[indStartIdx]) {
+                                      rows[indStartIdx].showIndicator = true;
+                                      rows[indStartIdx].indicatorSpan = rows.length - indStartIdx;
+                                    }
+                                  });
+
+                                  // Set objective span on the first row of objective
+                                  if (rows[objStartIdx]) {
+                                    rows[objStartIdx].showObjective = true;
+                                    rows[objStartIdx].objectiveSpan = rows.length - objStartIdx;
+                                  }
+                                });
+
+                                // Set program span on the first row of program
+                                if (rows[progStartIdx]) {
+                                  rows[progStartIdx].showProgram = true;
+                                  rows[progStartIdx].programSpan = rows.length - progStartIdx;
+                                }
+                              });
+
+                              return rows.map((row) => {
+                                const { pIdx, oIdx, iIdx, actIdx, program: p, objective: o, indicator: i, actionTitle, firstAct, assignedEmpIds } = row;
+
+                                return (
+                                  <tr key={row.key} className={actIdx > 0 ? "sub-rak-row" : ""}>
+                                    {/* Kolom No - di-merge per indikator */}
+                                    {row.showIndicator && (
+                                      <td rowSpan={row.indicatorSpan} className="text-center font-bold col-no">
+                                        {pIdx + 1}.{oIdx + 1}.{iIdx + 1}
+                                      </td>
+                                    )}
+
+                                    {/* Kolom Program - di-merge per program */}
+                                    {row.showProgram && (
+                                      <td rowSpan={row.programSpan} className="col-prog">
+                                        {pIdx + 1}. {p.programActivity}
+                                      </td>
+                                    )}
+
+                                    {/* Kolom Sasaran Program - di-merge per sasaran */}
+                                    {row.showObjective && (
+                                      <td rowSpan={row.objectiveSpan} className="col-sasaran">
+                                        {pIdx + 1}.{oIdx + 1} {o.objective}
+                                      </td>
+                                    )}
+
+                                    {/* Kolom Indikator Kinerja - di-merge per indikator */}
+                                    {row.showIndicator && (
+                                      <td rowSpan={row.indicatorSpan} className="col-ind">
+                                        {i.indicator}
+                                      </td>
+                                    )}
+
+                                    {/* Kolom Kegiatan (RAK) */}
+                                    <td className="col-rak">
+                                      {actionTitle ? (
+                                        <div className="rak-title-wrap">
+                                          <strong>{actionTitle}</strong>
+                                          {firstAct?.timelineQuarter && (
+                                            <span className="rak-quarter-badge">{firstAct.timelineQuarter}</span>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="text-muted" style={{ fontStyle: "italic" }}>
                                           Belum ada RAK
                                           {plans.canManage && (
                                             <button
@@ -910,136 +1044,125 @@ export default function PerformanceAgreementCenter() {
                                               + Tambah RAK
                                             </button>
                                           )}
-                                        </td>
-                                        <td className="col-target text-center">{i.target} {i.unit}</td>
-                                        <td className="col-pagu text-right">
-                                          {Number(p.budgetAmount) > 0 ? rupiah(Number(p.budgetAmount)) : "-"}
-                                        </td>
-                                        {activeMatrixCols.map((col) => (
-                                          <td key={col.id} className="col-matrix-cell empty">-</td>
-                                        ))}
-                                        {plans.canManage && <td className="text-center">-</td>}
-                                      </tr>
-                                    );
-                                  }
+                                        </div>
+                                      )}
+                                    </td>
 
-                                  return distinctActionTitles.map((title: any, actIdx: number) => {
-                                    const sharedActions = indActions.filter((a: any) => a.title === title);
-                                    const firstAct = sharedActions[0];
-                                    const assignedEmpIds = sharedActions.map((a: any) => String(a.picEmployeeId)).filter(Boolean);
+                                    {/* Kolom Target */}
+                                    <td className="col-target text-center">
+                                      {firstAct?.targetQty
+                                        ? `${firstAct.targetQty} ${firstAct.measurementUnit || i.unit}`
+                                        : `${i.target} ${i.unit}`}
+                                    </td>
 
-                                    return (
-                                      <tr key={`${i.id}-${actIdx}`} className={actIdx > 0 ? "sub-rak-row" : ""}>
-                                        <td className="text-center font-bold">
-                                          {pn + 1}.{on + 1}.{ix + 1}{actIdx > 0 ? `.${actIdx + 1}` : ""}
+                                    {/* Kolom Pagu Anggaran */}
+                                    <td className="col-pagu text-right">
+                                      {firstAct
+                                        ? Number(firstAct.budgetAmount || p.budgetAmount) > 0
+                                          ? rupiah(Number(firstAct.budgetAmount || p.budgetAmount))
+                                          : "-"
+                                        : Number(p.budgetAmount) > 0
+                                        ? rupiah(Number(p.budgetAmount))
+                                        : "-"}
+                                    </td>
+
+                                    {/* Kolom Matriks Pegawai */}
+                                    {activeMatrixCols.map((col) => {
+                                      if (!firstAct) {
+                                        return <td key={col.id} className="col-matrix-cell empty">-</td>;
+                                      }
+
+                                      const isChecked = assignedEmpIds.includes(String(col.id));
+                                      return (
+                                        <td key={col.id} className={`col-matrix-cell ${isChecked ? "checked" : ""}`}>
+                                          <button
+                                            type="button"
+                                            className={`matrix-checkbox-btn ${isChecked ? "active" : ""}`}
+                                            title={`${isChecked ? "Cabut" : "Tugaskan"} aksi ke ${col.fullName} (${col.sub})`}
+                                            onClick={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, col.id, isChecked)}
+                                          >
+                                            {isChecked ? "✓" : ""}
+                                          </button>
+                                          {isChecked && (
+                                            <button
+                                              type="button"
+                                              className="matrix-create-pk-mini"
+                                              title={`Buat PK untuk ${col.fullName}`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEditing(null);
+                                                applyInheritanceToForm(col.id, r.documentKey, r.year, firstAct.rktId, firstAct.id);
+                                                setShowPk(true);
+                                              }}
+                                            >
+                                              ⚡
+                                            </button>
+                                          )}
                                         </td>
-                                        <td className="col-prog">{pn + 1}. {p.programActivity}</td>
-                                        <td className="col-sasaran">{pn + 1}.{on + 1} {o.objective}</td>
-                                        <td className="col-ind">{i.indicator}</td>
-                                        <td className="col-rak">
-                                          <div className="rak-title-wrap">
-                                            <strong>{title}</strong>
-                                            {firstAct.timelineQuarter && (
-                                              <span className="rak-quarter-badge">{firstAct.timelineQuarter}</span>
-                                            )}
+                                      );
+                                    })}
+
+                                    {/* Kolom Aksi */}
+                                    {plans.canManage && (
+                                      <td className="col-actions text-center">
+                                        {firstAct ? (
+                                          <div className="matrix-action-buttons">
+                                            <button
+                                              type="button"
+                                              className="btn-mini-add"
+                                              title="Tambah RAK untuk indikator ini"
+                                              onClick={() => {
+                                                const defaultPicId = r.policyOwnerId || (r.rktType === "Sekretaris" ? plans.employees?.find((e: any) => e.position === "Sekretaris")?.id : plans.employees?.find((e: any) => e.position === "Ketua")?.id) || "";
+                                                setActionForm(blankActionForm(String(i.id), defaultPicId));
+                                                setShowAction(true);
+                                              }}
+                                            >
+                                              +
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="btn-mini-edit"
+                                              title="Edit RAK"
+                                              onClick={() => {
+                                                setActionForm({
+                                                  id: firstAct.id,
+                                                  rktId: String(firstAct.rktId),
+                                                  title: firstAct.title,
+                                                  activityDescription: firstAct.activityDescription || "",
+                                                  targetQty: String(firstAct.targetQty || 0),
+                                                  measurementUnit: firstAct.measurementUnit || "",
+                                                  budgetAmount: String(firstAct.budgetAmount || 0),
+                                                  picEmployeeId: String(firstAct.picEmployeeId || ""),
+                                                  timelineQuarter: firstAct.timelineQuarter || "TW I",
+                                                  notes: firstAct.notes || "",
+                                                });
+                                                setShowAction(true);
+                                              }}
+                                            >
+                                              ✎
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="btn-mini-delete"
+                                              title="Hapus RAK"
+                                              onClick={() => {
+                                                if (confirm(`Hapus rencana aksi "${firstAct.title}"?`)) {
+                                                  request(`/api/work-plans?actionId=${firstAct.id}`, {}, "DELETE");
+                                                }
+                                              }}
+                                            >
+                                              ✕
+                                            </button>
                                           </div>
-                                        </td>
-                                        <td className="col-target text-center">
-                                          {firstAct.targetQty ? `${firstAct.targetQty} ${firstAct.measurementUnit || i.unit}` : `${i.target} ${i.unit}`}
-                                        </td>
-                                        <td className="col-pagu text-right">
-                                          {Number(firstAct.budgetAmount || p.budgetAmount) > 0
-                                            ? rupiah(Number(firstAct.budgetAmount || p.budgetAmount))
-                                            : "-"}
-                                        </td>
-                                        {activeMatrixCols.map((col) => {
-                                          const isChecked = assignedEmpIds.includes(String(col.id));
-                                          return (
-                                            <td key={col.id} className={`col-matrix-cell ${isChecked ? "checked" : ""}`}>
-                                              <button
-                                                type="button"
-                                                className={`matrix-checkbox-btn ${isChecked ? "active" : ""}`}
-                                                title={`${isChecked ? "Cabut" : "Tugaskan"} aksi ke ${col.fullName} (${col.sub})`}
-                                                onClick={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, col.id, isChecked)}
-                                              >
-                                                {isChecked ? "✓" : ""}
-                                              </button>
-                                              {isChecked && (
-                                                <button
-                                                  type="button"
-                                                  className="matrix-create-pk-mini"
-                                                  title={`Buat PK untuk ${col.fullName}`}
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setEditing(null);
-                                                    applyInheritanceToForm(col.id, r.documentKey, r.year, firstAct.rktId, firstAct.id);
-                                                    setShowPk(true);
-                                                  }}
-                                                >
-                                                  ⚡
-                                                </button>
-                                              )}
-                                            </td>
-                                          );
-                                        })}
-                                        {plans.canManage && (
-                                          <td className="col-actions text-center">
-                                            <div className="matrix-action-buttons">
-                                              <button
-                                                type="button"
-                                                className="btn-mini-add"
-                                                title="Tambah RAK untuk indikator ini"
-                                                onClick={() => {
-                                                  const defaultPicId = r.policyOwnerId || (r.rktType === "Sekretaris" ? plans.employees?.find((e: any) => e.position === "Sekretaris")?.id : plans.employees?.find((e: any) => e.position === "Ketua")?.id) || "";
-                                                  setActionForm(blankActionForm(String(i.id), defaultPicId));
-                                                  setShowAction(true);
-                                                }}
-                                              >
-                                                +
-                                              </button>
-                                              <button
-                                                type="button"
-                                                className="btn-mini-edit"
-                                                title="Edit RAK"
-                                                onClick={() => {
-                                                  setActionForm({
-                                                    id: firstAct.id,
-                                                    rktId: String(firstAct.rktId),
-                                                    title: firstAct.title,
-                                                    activityDescription: firstAct.activityDescription || "",
-                                                    targetQty: String(firstAct.targetQty || 0),
-                                                    measurementUnit: firstAct.measurementUnit || "",
-                                                    budgetAmount: String(firstAct.budgetAmount || 0),
-                                                    picEmployeeId: String(firstAct.picEmployeeId || ""),
-                                                    timelineQuarter: firstAct.timelineQuarter || "TW I",
-                                                    notes: firstAct.notes || ""
-                                                  });
-                                                  setShowAction(true);
-                                                }}
-                                              >
-                                                ✎
-                                              </button>
-                                              <button
-                                                type="button"
-                                                className="btn-mini-delete"
-                                                title="Hapus RAK"
-                                                onClick={() => {
-                                                  if (confirm(`Hapus rencana aksi "${firstAct.title}"?`)) {
-                                                    request(`/api/work-plans?actionId=${firstAct.id}`, {}, "DELETE");
-                                                  }
-                                                }}
-                                              >
-                                                ✕
-                                              </button>
-                                            </div>
-                                          </td>
+                                        ) : (
+                                          "-"
                                         )}
-                                      </tr>
-                                    );
-                                  });
-                                });
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
                               });
-                            })}
+                            })()}
                           </tbody>
                         </table>
                       </div>
