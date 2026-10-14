@@ -617,12 +617,33 @@ export default function PerformanceAgreementCenter() {
                         "Program Dukungan Manajemen dan Pelaksanaan Tugas Teknis Lainnya";
         const pagu = a.budgets?.find((b: any) => b.programName === rktProg)?.amount ||
                      (a.budgetTotal && a.indicators.length ? Math.round(a.budgetTotal / a.indicators.length) : 0);
+
+        // Find associated Kegiatan / RAK
+        const allActions = (plans.documents || []).flatMap((d: any) => d.actions || []).concat(data.actionPlans || []);
+        const matchingAction =
+          (i.sourceRktId && allActions.find((act: any) => String(act.rktId) === String(i.sourceRktId) && (String(act.picEmployeeId) === String(a.employeeId) || !act.picEmployeeId))) ||
+          (i.sourceRktId && allActions.find((act: any) => String(act.rktId) === String(i.sourceRktId))) ||
+          (a.sourceActionPlanId && allActions.find((act: any) => String(act.id) === String(a.sourceActionPlanId)));
+
+        const matchingBudget = a.budgets?.find((b: any) => b.outputDescription && b.programName === rktProg);
+
+        // Clean sourceDescription if it contains prefix text
+        const cleanSourceDesc = a.sourceDescription ? a.sourceDescription.replace(/^Inheritance otomatis dari RAK: "(.*)" \([^)]*\)$/, "$1").replace(/^Inheritance otomatis dari [^:]*: "(.*)" \([^)]*\)$/, "$1") : "";
+
+        const kegiatanName =
+          matchingAction?.title ||
+          matchingBudget?.outputDescription ||
+          (cleanSourceDesc && cleanSourceDesc !== "-" ? cleanSourceDesc : "") ||
+          a.sourceAction?.title ||
+          (i.objectiveType === "Sasaran Kegiatan" ? i.objective : "") ||
+          "-";
+
         return {
           agreement: a,
           indicator: i,
           programName: rktProg,
           sasaranName: i.objective || "Sasaran Kinerja",
-          kegiatanRakName: i.targetDisplay || i.sourceDescription || "-",
+          kegiatanRakName: kegiatanName,
           paguAnggaran: pagu,
           evaluations: evals,
         };
@@ -2915,7 +2936,7 @@ export default function PerformanceAgreementCenter() {
                     {editing.form.periodType === "Tahunan" && <option value={String(editing.agreement.year)}>Tahun Kinerja {editing.agreement.year}</option>}
                   </select>
                 </label>
-                <label>Progress (%)<input type="number" min="0" max="100" value={editing.form.progress} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, progress: e.target.value } })} /></label>
+                <label>Realisasi Output (%)<input type="number" min="0" max="100" value={editing.form.progress} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, progress: e.target.value } })} /></label>
                 <label>Realisasi Anggaran{editing.agreement.budgetTotal > 0 ? <input type="number" min="0" value={editing.form.budgetRealization} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, budgetRealization: e.target.value } })} /> : <input value="Tidak ada anggaran" disabled />}</label>
               </div>
               {isMonevLocked(editing.form.periodKey) && (
@@ -2930,12 +2951,11 @@ export default function PerformanceAgreementCenter() {
                 const progressDelta = Number(editing.form.progress || 0) - Number(previous.progress || 0);
                 const budgetDelta = Number(editing.form.budgetRealization || 0) - Number(previous.budgetRealization || 0);
                 return <div className="monev-previous">
-                  <header><div><span>RINGKASAN PERIODE SEBELUMNYA</span><b>{previous.periodType} · {periodDetails(previous.periodType, previous.periodKey).evaluated}</b></div>{!editing.form.id && <button type="button" onClick={() => setEditing({ ...editing, form: { ...editing.form, problemIdentification: previous.problemIdentification || "", improvementEffort: previous.improvementEffort || "", notes: previous.notes || "" } })}>Salin sebagai Data Awal</button>}</header>
-                  <div className="monev-previous-stats"><div><span>Progress sebelumnya</span><b>{previous.progress}%</b></div><div><span>Progress sekarang</span><b>{editing.form.progress || 0}%</b><small className={progressDelta < 0 ? "negative" : ""}>{progressDelta >= 0 ? "+" : ""}{progressDelta}%</small></div><div><span>Anggaran sebelumnya</span><b>{rupiah(previous.budgetRealization)}</b></div><div><span>Anggaran sekarang</span><b>{rupiah(Number(editing.form.budgetRealization || 0))}</b><small className={budgetDelta < 0 ? "negative" : ""}>{budgetDelta >= 0 ? "+" : ""}{rupiah(budgetDelta)}</small></div></div>
-                  <div className="monev-previous-copy"><p><b>Realisasi Output:</b> {previous.outputRealization || "—"}</p><p><b>Permasalahan:</b> {previous.problemIdentification || "—"}</p><p><b>Upaya Peningkatan:</b> {previous.improvementEffort || "—"}</p><p><b>Kegiatan:</b> {previous.completedActivities || "—"}</p><p><b>Keterangan:</b> {previous.notes || "—"}</p>{!!previous.evidenceLinks?.length && <div className="monev-links">{previous.evidenceLinks.map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}</div>
+                  <header><div><span>RINGKASAN PERIODE SEBELUMNYA</span><b>{previous.periodType} · {periodDetails(previous.periodType, previous.periodKey).evaluated}</b></div>{!editing.form.id && <button type="button" onClick={() => setEditing({ ...editing, form: { ...editing.form, problemIdentification: previous.problemIdentification || "", improvementEffort: previous.improvementEffort || "", completedActivities: previous.completedActivities || "", notes: previous.notes || "" } })}>Salin sebagai Data Awal</button>}</header>
+                  <div className="monev-previous-stats"><div><span>Realisasi Output sebelumnya</span><b>{previous.progress}%</b></div><div><span>Realisasi Output sekarang</span><b>{editing.form.progress || 0}%</b><small className={progressDelta < 0 ? "negative" : ""}>{progressDelta >= 0 ? "+" : ""}{progressDelta}%</small></div><div><span>Anggaran sebelumnya</span><b>{rupiah(previous.budgetRealization)}</b></div><div><span>Anggaran sekarang</span><b>{rupiah(Number(editing.form.budgetRealization || 0))}</b><small className={budgetDelta < 0 ? "negative" : ""}>{budgetDelta >= 0 ? "+" : ""}{rupiah(budgetDelta)}</small></div></div>
+                  <div className="monev-previous-copy"><p><b>Kegiatan:</b> {previous.completedActivities || "—"}</p><p><b>Permasalahan:</b> {previous.problemIdentification || "—"}</p><p><b>Upaya Peningkatan:</b> {previous.improvementEffort || "—"}</p><p><b>Keterangan:</b> {previous.notes || "—"}</p>{!!previous.evidenceLinks?.length && <div className="monev-links">{previous.evidenceLinks.map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}</div>
                 </div>;
               })()}
-              <label>Realisasi Output<textarea rows={3} value={editing.form.outputRealization} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, outputRealization: e.target.value } })} /></label>
               <label>Identifikasi Permasalahan<textarea rows={3} value={editing.form.problemIdentification} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, problemIdentification: e.target.value } })} /></label>
               <label>Upaya Peningkatan<textarea rows={3} value={editing.form.improvementEffort} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, improvementEffort: e.target.value } })} /></label>
               <label>Kegiatan yang Sudah Dilaksanakan<textarea rows={3} value={editing.form.completedActivities} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, completedActivities: e.target.value } })} /></label>
