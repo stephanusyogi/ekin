@@ -26,6 +26,24 @@ const blankObjective = () => ({
 });
 const blankBudget = () => ({ programName: "", outputDescription: "", amount: 0 });
 const blankMonev = () => ({ id: "", periodType: "Bulanan", periodKey: "", progress: 0, budgetRealization: 0, outputRealization: "", problemIdentification: "", improvementEffort: "", completedActivities: "", evidenceLinks: [""], notes: "" });
+const parseEvidenceLinks = (val: any): string[] => {
+  if (Array.isArray(val)) {
+    const list = val.flatMap((x) => (typeof x === "string" ? x.split(/\r?\n|,/) : x)).map((x) => String(x || "").trim()).filter(Boolean);
+    return list.length ? list : [""];
+  }
+  if (typeof val === "string" && val.trim()) {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) {
+        const list = parsed.flatMap((x) => (typeof x === "string" ? x.split(/\r?\n|,/) : x)).map((x) => String(x || "").trim()).filter(Boolean);
+        return list.length ? list : [""];
+      }
+    } catch {}
+    const list = val.split(/\r?\n|,/).map((x) => x.trim()).filter(Boolean);
+    return list.length ? list : [""];
+  }
+  return [""];
+};
 const rupiah = (value: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value || 0);
 const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const monthlyPeriods = [1, 2, 4, 5, 7, 8, 10, 11];
@@ -2008,9 +2026,9 @@ export default function PerformanceAgreementCenter() {
 
                               {/* Kolom 10: Link Bukti Dukung */}
                               <td style={{ verticalAlign: "top" }}>
-                                {ev?.evidenceLinks?.filter(Boolean).length ? (
+                                {parseEvidenceLinks(ev?.evidenceLinks).filter(Boolean).length ? (
                                   <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                    {ev.evidenceLinks.filter(Boolean).map((link: string, idx: number) => (
+                                    {parseEvidenceLinks(ev?.evidenceLinks).filter(Boolean).map((link: string, idx: number) => (
                                       <a
                                         key={idx}
                                         href={link}
@@ -2062,7 +2080,7 @@ export default function PerformanceAgreementCenter() {
                                         <button
                                           type="button"
                                           className="btn-mini-edit"
-                                          onClick={() => setEditing({ type: "monev", agreement: row.agreement, indicator: row.indicator, form: { ...ev, evidenceLinks: ev.evidenceLinks?.length ? ev.evidenceLinks : [""] } })}
+                                          onClick={() => setEditing({ type: "monev", agreement: row.agreement, indicator: row.indicator, form: { ...ev, evidenceLinks: parseEvidenceLinks(ev?.evidenceLinks) } })}
                                         >
                                           Edit
                                         </button>
@@ -2171,11 +2189,11 @@ export default function PerformanceAgreementCenter() {
                           <p><b>Waktu pengisian:</b> {periodDetails(e.periodType, e.periodKey).submitted}</p>
                           <div><span>Realisasi Anggaran</span><b>{rupiah(e.budgetRealization)}</b></div>
                           <p><b>Realisasi Output:</b> {e.outputRealization || "—"}</p><p><b>Permasalahan:</b> {e.problemIdentification || "—"}</p><p><b>Upaya Peningkatan:</b> {e.improvementEffort || "—"}</p><p><b>Kegiatan:</b> {e.completedActivities || "—"}</p><p><b>Keterangan:</b> {e.notes || "—"}</p>
-                          {!!e.evidenceLinks.length && <div className="monev-links">{e.evidenceLinks.map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}
+                          {parseEvidenceLinks(e.evidenceLinks).filter(Boolean).length > 0 && <div className="monev-links">{parseEvidenceLinks(e.evidenceLinks).filter(Boolean).map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}
                           {(data.canManageAll || (a.employeeId === data.currentEmployee?.id && !locked)) && (
                             <div className="row-actions">
-                              <button onClick={() => setEditing({ type: "monev", agreement: a, indicator: i, form: { ...e, evidenceLinks: e.evidenceLinks.length ? e.evidenceLinks : [""] } })}>Edit</button>
-                              <button className="danger" onClick={() => request(`/api/performance-evaluations?id=${e.id}`, {}, "DELETE")}>Hapus</button>
+                              <button type="button" onClick={() => setEditing({ type: "monev", agreement: a, indicator: i, form: { ...e, evidenceLinks: parseEvidenceLinks(e.evidenceLinks) } })}>Edit</button>
+                              <button type="button" className="danger" onClick={() => request(`/api/performance-evaluations?id=${e.id}`, {}, "DELETE")}>Hapus</button>
                             </div>
                           )}
                         </section>
@@ -2953,20 +2971,75 @@ export default function PerformanceAgreementCenter() {
                 return <div className="monev-previous">
                   <header><div><span>RINGKASAN PERIODE SEBELUMNYA</span><b>{previous.periodType} · {periodDetails(previous.periodType, previous.periodKey).evaluated}</b></div>{!editing.form.id && <button type="button" onClick={() => setEditing({ ...editing, form: { ...editing.form, problemIdentification: previous.problemIdentification || "", improvementEffort: previous.improvementEffort || "", completedActivities: previous.completedActivities || "", notes: previous.notes || "" } })}>Salin sebagai Data Awal</button>}</header>
                   <div className="monev-previous-stats"><div><span>Realisasi Output sebelumnya</span><b>{previous.progress}%</b></div><div><span>Realisasi Output sekarang</span><b>{editing.form.progress || 0}%</b><small className={progressDelta < 0 ? "negative" : ""}>{progressDelta >= 0 ? "+" : ""}{progressDelta}%</small></div><div><span>Anggaran sebelumnya</span><b>{rupiah(previous.budgetRealization)}</b></div><div><span>Anggaran sekarang</span><b>{rupiah(Number(editing.form.budgetRealization || 0))}</b><small className={budgetDelta < 0 ? "negative" : ""}>{budgetDelta >= 0 ? "+" : ""}{rupiah(budgetDelta)}</small></div></div>
-                  <div className="monev-previous-copy"><p><b>Kegiatan:</b> {previous.completedActivities || "—"}</p><p><b>Permasalahan:</b> {previous.problemIdentification || "—"}</p><p><b>Upaya Peningkatan:</b> {previous.improvementEffort || "—"}</p><p><b>Keterangan:</b> {previous.notes || "—"}</p>{!!previous.evidenceLinks?.length && <div className="monev-links">{previous.evidenceLinks.map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}</div>
+                  <div className="monev-previous-copy"><p><b>Kegiatan:</b> {previous.completedActivities || "—"}</p><p><b>Permasalahan:</b> {previous.problemIdentification || "—"}</p><p><b>Upaya Peningkatan:</b> {previous.improvementEffort || "—"}</p><p><b>Keterangan:</b> {previous.notes || "—"}</p>{parseEvidenceLinks(previous.evidenceLinks).filter(Boolean).length > 0 && <div className="monev-links">{parseEvidenceLinks(previous.evidenceLinks).filter(Boolean).map((link:string,n:number) => <a href={link} target="_blank" rel="noreferrer" key={n}>Bukti {n + 1}</a>)}</div>}</div>
                 </div>;
               })()}
               <label>Identifikasi Permasalahan<textarea rows={3} value={editing.form.problemIdentification} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, problemIdentification: e.target.value } })} /></label>
               <label>Upaya Peningkatan<textarea rows={3} value={editing.form.improvementEffort} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, improvementEffort: e.target.value } })} /></label>
               <label>Kegiatan yang Sudah Dilaksanakan<textarea rows={3} value={editing.form.completedActivities} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, completedActivities: e.target.value } })} /></label>
-              <div className="monev-evidence"><div><b>Link Bukti Dukung</b><button onClick={() => setEditing({ ...editing, form: { ...editing.form, evidenceLinks: [...editing.form.evidenceLinks, ""] } })}>+ Link</button></div>{editing.form.evidenceLinks.map((link:string,n:number) => <div key={n}><input type="url" placeholder="https://..." value={link} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, evidenceLinks: editing.form.evidenceLinks.map((x:string,k:number) => k === n ? e.target.value : x) } })} />{editing.form.evidenceLinks.length > 1 && <button onClick={() => setEditing({ ...editing, form: { ...editing.form, evidenceLinks: editing.form.evidenceLinks.filter((_:string,k:number) => k !== n) } })}>Hapus</button>}</div>)}</div>
+              <div className="monev-evidence">
+                <div>
+                  <b>Link Bukti Dukung</b>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const current = Array.isArray(editing.form.evidenceLinks) ? editing.form.evidenceLinks : parseEvidenceLinks(editing.form.evidenceLinks);
+                      setEditing({ ...editing, form: { ...editing.form, evidenceLinks: [...current, ""] } });
+                    }}
+                  >
+                    + Link
+                  </button>
+                </div>
+                {(Array.isArray(editing.form.evidenceLinks) ? editing.form.evidenceLinks : parseEvidenceLinks(editing.form.evidenceLinks)).map((link: string, n: number) => {
+                  const currentList = Array.isArray(editing.form.evidenceLinks) ? editing.form.evidenceLinks : parseEvidenceLinks(editing.form.evidenceLinks);
+                  return (
+                    <div key={n}>
+                      <input
+                        type="text"
+                        placeholder="https://... atau link drive/dokumen"
+                        value={link}
+                        onChange={(e) => {
+                          const next = currentList.map((x: string, k: number) => (k === n ? e.target.value : x));
+                          setEditing({
+                            ...editing,
+                            form: { ...editing.form, evidenceLinks: next },
+                          });
+                        }}
+                      />
+                      {currentList.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = currentList.filter((_: string, k: number) => k !== n);
+                            setEditing({
+                              ...editing,
+                              form: { ...editing.form, evidenceLinks: next.length ? next : [""] },
+                            });
+                          }}
+                        >
+                          Hapus
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
               <label>Keterangan<textarea rows={3} value={editing.form.notes} onChange={(e) => setEditing({ ...editing, form: { ...editing.form, notes: e.target.value } })} /></label>
             </div>
             <div className="modal-actions">
-              <button onClick={() => setEditing(null)}>Batal</button>
+              <button type="button" onClick={() => setEditing(null)}>Batal</button>
               <button
+                type="button"
                 className="primary"
-                onClick={() => request("/api/performance-evaluations", { ...editing.form, indicatorId: editing.indicator.id }, editing.form.id ? "PATCH" : "POST")}
+                onClick={() => {
+                  const rawLinks = Array.isArray(editing.form.evidenceLinks) ? editing.form.evidenceLinks : parseEvidenceLinks(editing.form.evidenceLinks);
+                  const cleanedLinks = rawLinks.map((x: any) => String(x || "").trim()).filter(Boolean);
+                  request(
+                    "/api/performance-evaluations",
+                    { ...editing.form, evidenceLinks: cleanedLinks, indicatorId: editing.indicator?.id || editing.form.indicatorId },
+                    editing.form.id ? "PATCH" : "POST"
+                  );
+                }}
               >
                 {editing.form.id ? "Simpan Perubahan" : "Simpan Monev"}
               </button>
@@ -3043,7 +3116,7 @@ export default function PerformanceAgreementCenter() {
                   </td>
                   <td>{ev?.completedActivities || "—"}</td>
                   <td style={{ fontSize: "5pt" }}>
-                    {ev?.evidenceLinks?.filter(Boolean).join("\n") || "—"}
+                    {parseEvidenceLinks(ev?.evidenceLinks).filter(Boolean).join("\n") || "—"}
                   </td>
                   <td style={{ textAlign: "right" }}>
                     {ev ? rupiah(budgetReal) : "—"}

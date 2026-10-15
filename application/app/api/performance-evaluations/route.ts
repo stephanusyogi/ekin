@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     await refreshIndicator(db, indicator.id);
     return Response.json({ evaluation: row }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error && error.message==="INVALID_EVIDENCE_LINK"?"Link bukti dukung wajib menggunakan HTTPS dan maksimal 2.048 karakter":error instanceof Error && error.message.includes("UNIQUE") ? "Monev untuk indikator dan periode tersebut sudah ada" : "Monev belum dapat disimpan";
+    const message = error instanceof Error && error.message==="INVALID_EVIDENCE_LINK"?"Link bukti dukung wajib berupa tautan yang valid dan maksimal 2.048 karakter":error instanceof Error && error.message.includes("UNIQUE") ? "Monev untuk indikator dan periode tersebut sudah ada" : (error instanceof Error ? error.message : "Monev belum dapat disimpan");
     return Response.json({ error: message }, { status: 400 });
   }
 }
@@ -96,7 +96,7 @@ export async function PATCH(request: Request) {
     await logSecurityEvent(request,{actorEmail:me.email,actorRole:me.role,action:"UPDATE",resourceType:"monev",resourceId:row.id,before:row,after:updated});
     await refreshIndicator(db, row.indicatorId);
     return Response.json({ evaluation: updated });
-  } catch(error) { return Response.json({ error: error instanceof Error&&error.message==="INVALID_EVIDENCE_LINK"?"Link bukti dukung wajib menggunakan HTTPS dan maksimal 2.048 karakter":"Monev belum dapat diperbarui" }, { status: 400 }); }
+  } catch(error) { return Response.json({ error: error instanceof Error&&error.message==="INVALID_EVIDENCE_LINK"?"Link bukti dukung wajib berupa tautan yang valid dan maksimal 2.048 karakter":(error instanceof Error ? error.message : "Monev belum dapat diperbarui") }, { status: 400 }); }
 }
 
 export async function DELETE(request: Request) {

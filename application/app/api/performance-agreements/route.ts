@@ -113,8 +113,14 @@ export async function GET(request: Request) {
         budgetTotal: budgets.filter((b) => b.agreementId === a.id).reduce((sum, b) => sum + b.amount, 0),
         objectives: [...objectiveMap.values()].sort((x, y) => x.objectiveGroup - y.objectiveGroup),
         evaluations: evaluations.filter((e) => e.agreementId === a.id).map((e) => {
-          let parsedLinks = [];
-          try { parsedLinks = JSON.parse(e.evidenceLinks || "[]"); } catch { parsedLinks = e.evidenceLinks ? [e.evidenceLinks] : []; }
+          let parsedLinks: string[] = [];
+          try {
+            const p = JSON.parse(e.evidenceLinks || "[]");
+            parsedLinks = Array.isArray(p) ? p.flatMap((x) => typeof x === "string" ? x.split(/\r?\n|,/) : x) : (p ? [String(p)] : []);
+          } catch {
+            parsedLinks = e.evidenceLinks ? String(e.evidenceLinks).split(/\r?\n|,/) : [];
+          }
+          parsedLinks = parsedLinks.map((x) => String(x || "").trim()).filter(Boolean);
           return { ...e, evidenceLinks: parsedLinks };
         }),
       });}),

@@ -25,7 +25,32 @@ export async function enforceRateLimit(request:Request,action:string,identity:st
   await db.update(securityRateLimits).set({requestCount:row.requestCount+1,updatedAt:new Date(now).toISOString().slice(0, 19).replace('T', ' ')}).where(eq(securityRateLimits.id,row.id));
 }
 
-export function cleanEvidenceLinks(value:unknown){
-  const values=(Array.isArray(value)?value:String(value||"").split(/\n|,/)).map(x=>String(x).trim()).filter(Boolean).slice(0,10);
-  return values.map(raw=>{if(raw.length>2048)throw new Error("INVALID_EVIDENCE_LINK");let url:URL;try{url=new URL(raw)}catch{throw new Error("INVALID_EVIDENCE_LINK")};if(url.protocol!=="https:")throw new Error("INVALID_EVIDENCE_LINK");url.username="";url.password="";return url.toString()});
+export function cleanEvidenceLinks(value: unknown): string[] {
+  if (!value) return [];
+  const rawList = Array.isArray(value) ? value : [value];
+  const items = rawList
+    .flatMap((x) => String(x || "").split(/\r?\n|,/))
+    .map((x) => String(x).trim())
+    .filter(Boolean)
+    .slice(0, 10);
+
+  return items.map((raw) => {
+    if (raw.length > 2048) throw new Error("INVALID_EVIDENCE_LINK");
+    let candidate = raw.trim();
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(candidate)) {
+      candidate = "https://" + candidate;
+    }
+    let url: URL;
+    try {
+      url = new URL(candidate);
+    } catch {
+      throw new Error("INVALID_EVIDENCE_LINK");
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      throw new Error("INVALID_EVIDENCE_LINK");
+    }
+    url.username = "";
+    url.password = "";
+    return url.toString();
+  });
 }
