@@ -12,7 +12,7 @@ import {
   performanceIndicators,
 } from "../../../db/schema";
 import { hasSakipOperator, requireAuthorizedUser } from "../../lib/access";
-const managers = ["super_user", "super_admin", "admin"];
+const managers = ["super_user", "super_admin", "admin", "operator"];
 const flattenObjectives = (payload: any) => {
   if (Array.isArray(payload.objectives))
     return payload.objectives.flatMap((objective: any, groupIndex: number) =>

@@ -4,7 +4,7 @@ import { employees, monevPeriodLocks, performanceAgreements, performanceBudgets,
 import { hasSakipOperator, requireAuthorizedUser } from "../../lib/access";
 import { cleanEvidenceLinks, logSecurityEvent } from "../../lib/security";
 
-const managers = ["super_user", "super_admin", "admin"];
+const managers = ["super_user", "super_admin", "admin", "operator"];
 const validPeriod = (type: string, key: string, year: number) => {
   if (type === "Bulanan") return [`${year}-01`, `${year}-02`, `${year}-04`, `${year}-05`, `${year}-07`, `${year}-08`, `${year}-10`, `${year}-11`].includes(key);
   if (type === "Triwulanan") return [`${year}-Q1`, `${year}-Q2`, `${year}-Q3`, `${year}-Q4`].includes(key);

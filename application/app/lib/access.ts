@@ -41,5 +41,5 @@ export async function requireSuperAdmin(request: Request) {
   const authorized=await requireAuthorizedUser(request); if(!["super_user","super_admin"].includes(authorized.role)) throw new Error("FORBIDDEN"); return {email:authorized.email,role:authorized.role};
 }
 export const hasAttendanceOperator=(user:Awaited<ReturnType<typeof getAuthorizedIdentity>>)=>["super_user","super_admin","admin","operator"].includes(user.role)||Boolean(user.isEmployee&&user.employee.operatorAttendance);
-export const hasSakipOperator=(user:Awaited<ReturnType<typeof getAuthorizedIdentity>>)=>["super_user","super_admin"].includes(user.role)||Boolean(user.isEmployee&&user.employee.operatorSakip);
+export const hasSakipOperator=(user:Awaited<ReturnType<typeof getAuthorizedIdentity>>)=>["super_user","super_admin","admin","operator"].includes(user.role)||Boolean(user.isEmployee&&user.employee.operatorSakip);
 export async function requireAllAttendanceReportAccess(request:Request){const user=await requireAuthorizedUser(request);if(!hasAttendanceOperator(user))throw new Error("FORBIDDEN");return user;}

@@ -162,8 +162,9 @@ export default function PerformanceAgreementCenter() {
       notes: "",
       status: "Aktif",
     }),
-    [actionForm, setActionForm] = useState<any>(blankActionForm()),
-    [editing, setEditing] = useState<any>(null);
+    [editing, setEditing] = useState<any>(null),
+    [printModal, setPrintModal] = useState<any>(null),
+    [printDocDate, setPrintDocDate] = useState<string>("2 Januari 2026");
   const notify = (m: string) => {
       setToast(m);
       setTimeout(() => setToast(""), 2600);
@@ -859,14 +860,16 @@ export default function PerformanceAgreementCenter() {
           {plans.canManage && (
             <button onClick={() => { setSelectedKetuaProgram(""); setRktForm({ year, rktType: "Ketua", programs: [blankRktProgram()], policyOwnerId: plans.employees.find((e:any) => e.position === "Ketua")?.id || "", notes: "", status: "Aktif", documentKey: undefined }); setShowRkt(true); }}>+ RKT</button>
           )}
-          <button className="primary" onClick={() => {
-            const initialEmpId = form.employeeId || data.selfEmployeeId || data.employees?.[0]?.id;
-            if (initialEmpId) applyInheritanceToForm(initialEmpId, undefined, Number(form.year || year));
-            setEditing(null);
-            setShowPk(true);
-          }}>
-            + Buat PK
-          </button>
+          {(plans.canManage || data.canManageAll) && (
+            <button className="primary" onClick={() => {
+              const initialEmpId = form.employeeId || data.selfEmployeeId || data.employees?.[0]?.id;
+              if (initialEmpId) applyInheritanceToForm(initialEmpId, undefined, Number(form.year || year));
+              setEditing(null);
+              setShowPk(true);
+            }}>
+              + Buat PK
+            </button>
+          )}
         </div>
       </div>
       <div className="pk-tabs">
@@ -1790,8 +1793,8 @@ export default function PerformanceAgreementCenter() {
                     }}>Edit</button>}
                     <button
                       onClick={() => {
-                        setEditing(a);
-                        setTimeout(() => window.print(), 50);
+                        setPrintDocDate(`2 Januari ${a.year || year}`);
+                        setPrintModal(a);
                       }}
                     >
                       Cetak PK
@@ -3132,47 +3135,333 @@ export default function PerformanceAgreementCenter() {
           </tbody>
         </table>
       </article>}
-      {editing && !editing.type && (
-        <article className="pk-print-sheet">
-          <h1>{editing.version > 1 ? `PERUBAHAN KE-${editing.version - 1} ` : ""}PERJANJIAN KINERJA</h1>
-          <p>{String(editing.agreementLevel || editing.employee?.position || "").toUpperCase()} · TAHUN {editing.year}</p>
-          <table>
-            <thead>
-              <tr>
-                <th>No.</th>
-                <th>Sasaran Program (Outcome) / Sasaran Kegiatan</th>
-                <th>Indikator Kinerja</th>
-                <th>Target</th>
-              </tr>
-            </thead>
-            <tbody>
-              {editing.objectives.flatMap((objective:any, n:number) => objective.indicators.map((i:any, k:number) => <tr key={i.id}>
-                {k === 0 && <td rowSpan={objective.indicators.length}>{n + 1}</td>}
-                {k === 0 && <td rowSpan={objective.indicators.length}>{objective.objective}</td>}
-                <td>{i.indicator}</td>
-                <td>{i.targetDisplay || `${i.target} ${i.unit}`}</td>
-              </tr>))}
-            </tbody>
-          </table>
-          <table className="pk-budget-print">
-            <thead><tr><th>{editing.agreementLevel === "Staf" ? "Program / Kegiatan dan Output Staf" : "Program"}</th><th>{editing.agreementLevel === "Staf" ? "Alokasi Anggaran" : "Anggaran"}</th></tr></thead>
-            <tbody>
-              {editing.budgets.map((budget:any, n:number) => <tr key={budget.id}><td>{n + 1}. {budget.programName}{budget.outputDescription ? ` — ${budget.outputDescription}` : ""}</td><td>{rupiah(budget.amount)}</td></tr>)}
-              <tr><th>{editing.agreementLevel === "Staf" ? "Total Alokasi Anggaran" : "Total Anggaran"}</th><th>{rupiah(editing.budgetTotal)}</th></tr>
-            </tbody>
-          </table>
-          <footer className={String(editing.employee?.position || editing.agreementLevel || "").trim().toLowerCase() === "ketua" || (String(editing.employee?.position || editing.agreementLevel || "").trim().toLowerCase() === "sekretaris" && String(editing.supervisor?.position || "").trim().toLowerCase() !== "ketua") ? "single" : ""}>
-            <div>
-              <p>Pegawai yang berjanji,</p>
-              <b>{editing.employee?.fullName}</b>
+      {printModal && (() => {
+        const isKetua = String(printModal.employee?.position || printModal.agreementLevel || "").trim().toLowerCase().includes("ketua");
+        const effectiveBudgets = (printModal.budgets && printModal.budgets.length > 0)
+          ? printModal.budgets
+          : (data.rkt || [])
+              .filter((r: any) => Number(r.year) === Number(printModal.year) && Number(r.budgetAmount) > 0)
+              .reduce((acc: any[], r: any) => {
+                if (!acc.find((b: any) => b.programName === r.programActivity)) {
+                  acc.push({ id: r.id, programName: r.programActivity, amount: Number(r.budgetAmount) || 0 });
+                }
+                return acc;
+              }, []);
+        const effectiveBudgetTotal = effectiveBudgets.reduce((sum: number, b: any) => sum + (Number(b.amount) || 0), 0);
+
+        return (
+          <div className="pk-print-overlay">
+            {/* Top Toolbar (Hidden when printed) */}
+            <div className="pk-print-toolbar no-print">
+              <div className="pk-print-toolbar-left">
+                <b>📄 Cetak Dokumen SAKIP — Perjanjian Kinerja {printModal.employee?.fullName}</b>
+                <div className="pk-print-date-input-wrap">
+                  <span>Tanggal Dokumen:</span>
+                  <input
+                    type="text"
+                    value={printDocDate}
+                    onChange={(e) => setPrintDocDate(e.target.value)}
+                    placeholder="Contoh: 2 Januari 2026"
+                  />
+                </div>
+              </div>
+              <div className="pk-print-toolbar-right">
+                <button
+                  type="button"
+                  className="pk-btn-print"
+                  onClick={() => window.print()}
+                >
+                  🖨️ Cetak / Simpan PDF (A4)
+                </button>
+                <button
+                  type="button"
+                  className="pk-btn-close-print"
+                  onClick={() => setPrintModal(null)}
+                >
+                  ✕ Tutup
+                </button>
+              </div>
             </div>
-            {String(editing.employee?.position || editing.agreementLevel || "").trim().toLowerCase() !== "ketua" && !(String(editing.employee?.position || editing.agreementLevel || "").trim().toLowerCase() === "sekretaris" && String(editing.supervisor?.position || "").trim().toLowerCase() !== "ketua") && <div>
-              <p>Atasan langsung,</p>
-              <b>{editing.supervisor?.fullName || "Belum ditentukan"}</b>
-            </div>}
-          </footer>
-        </article>
-      )}
+
+            {/* Document Pages Container */}
+            <div className="pk-print-pages-container">
+              {/* === HALAMAN 1: NASKAH PERJANJIAN KINERJA === */}
+              <article className="pk-print-page pk-print-page-1">
+                <div className="pk-official-header">
+                  <img src="/kpu-logo.png" alt="Logo KPU" className="pk-official-logo" />
+                  <h2>KOMISI PEMILIHAN UMUM<br />KABUPATEN NGAWI</h2>
+                  <h3>PERJANJIAN KINERJA TAHUN {printModal.year}</h3>
+                </div>
+
+                <p style={{ margin: "14px 0", textAlign: "justify" }}>
+                  Dalam rangka mewujudkan manajemen pemerintah yang efektif, transparan, dan akuntabel serta berorientasi pada hasil, yang bertandatangan di bawah ini:
+                </p>
+
+                {isKetua ? (
+                  <>
+                    <table className="pk-parties-table">
+                      <tbody>
+                        <tr>
+                          <td style={{ width: "95px" }}>Nama</td>
+                          <td style={{ width: "15px" }}>:</td>
+                          <td><b>{printModal.employee?.fullName?.toUpperCase() || "SAMSU MUSTAKIM"}</b></td>
+                        </tr>
+                        <tr>
+                          <td>Jabatan</td>
+                          <td>:</td>
+                          <td>Ketua Komisi Pemilihan Umum Kabupaten Ngawi</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <p style={{ margin: "14px 0", textAlign: "justify" }}>
+                      berjanji akan mewujudkan target kinerja yang seharusnya sesuai lampiran perjanjian ini, dalam rangka mencapai target kinerja jangka menengah seperti yang telah ditetapkan dalam dokumen perencanaan.
+                    </p>
+                    <p style={{ margin: "14px 0", textAlign: "justify" }}>
+                      Keberhasilan dan kegagalan pencapaian target kinerja tersebut menjadi tanggung jawab kami.
+                    </p>
+
+                    <div style={{ marginTop: "45px", display: "flex", justifyContent: "flex-end" }}>
+                      <div style={{ width: "320px", textAlign: "center" }}>
+                        <p style={{ margin: 0 }}>Ngawi, {printDocDate}</p>
+                        <p style={{ margin: "4px 0 0 0", fontWeight: "bold" }}>
+                          KETUA KOMISI PEMILIHAN UMUM<br />KABUPATEN NGAWI,
+                        </p>
+                        <div className="pk-sign-spacer"></div>
+                        <p style={{ margin: 0, fontWeight: "bold", textDecoration: "underline" }}>
+                          {printModal.employee?.fullName?.toUpperCase() || "SAMSU MUSTAKIM"}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <table className="pk-parties-table">
+                      <tbody>
+                        <tr>
+                          <td style={{ width: "95px" }}>Nama</td>
+                          <td style={{ width: "15px" }}>:</td>
+                          <td><b>{printModal.employee?.fullName}</b></td>
+                        </tr>
+                        <tr>
+                          <td>Jabatan</td>
+                          <td>:</td>
+                          <td>{printModal.agreementLevel || printModal.employee?.position}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} style={{ fontStyle: "italic", padding: "4px 0 8px 0" }}>
+                            Selanjutnya disebut pihak pertama
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Nama</td>
+                          <td>:</td>
+                          <td><b>{printModal.supervisor?.fullName || "Belum ditentukan"}</b></td>
+                        </tr>
+                        <tr>
+                          <td>Jabatan</td>
+                          <td>:</td>
+                          <td>{printModal.supervisor?.position || "Atasan Langsung"}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={3} style={{ fontStyle: "italic", padding: "4px 0 6px 0" }}>
+                            Selanjutnya disebut pihak kedua
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <p style={{ margin: "12px 0", textAlign: "justify" }}>
+                      Pihak pertama berjanji akan mewujudkan target kinerja yang seharusnya sesuai lampiran perjanjian ini, dalam rangka mencapai target kinerja jangka menengah seperti yang telah ditetapkan dalam dokumen perencanaan. Keberhasilan dan kegagalan pencapaian target kinerja tersebut menjadi tanggung jawab kami.
+                    </p>
+                    <p style={{ margin: "12px 0", textAlign: "justify" }}>
+                      Pihak kedua akan melakukan supervisi yang diperlukan serta akan melakukan evaluasi terhadap capaian kinerja dari perjanjian ini dan mengambil tindakan yang diperlukan dalam rangka pemberian penghargaan dan sanksi.
+                    </p>
+
+                    <div style={{ marginTop: "40px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", textAlign: "center" }}>
+                      <div>
+                        <p style={{ margin: 0, visibility: "hidden" }}>&nbsp;</p>
+                        <p style={{ margin: "4px 0 0 0", fontWeight: "bold" }}>
+                          Pihak Kedua,<br />
+                          {printModal.supervisor?.position || "Atasan Langsung"}<br />
+                          Komisi Pemilihan Umum Kabupaten Ngawi
+                        </p>
+                        <div className="pk-sign-spacer"></div>
+                        <p style={{ margin: 0, fontWeight: "bold", textDecoration: "underline" }}>
+                          {printModal.supervisor?.fullName || "Belum ditentukan"}
+                        </p>
+                      </div>
+                      <div>
+                        <p style={{ margin: 0 }}>Ngawi, {printDocDate}</p>
+                        <p style={{ margin: "4px 0 0 0", fontWeight: "bold" }}>
+                          Pihak Pertama,<br />
+                          {printModal.employee?.position || printModal.agreementLevel}<br />
+                          Komisi Pemilihan Umum Kabupaten Ngawi
+                        </p>
+                        <div className="pk-sign-spacer"></div>
+                        <p style={{ margin: 0, fontWeight: "bold", textDecoration: "underline" }}>
+                          {printModal.employee?.fullName}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </article>
+
+              {/* === HALAMAN 2: LAMPIRAN PERJANJIAN KINERJA === */}
+              <article className="pk-print-page pk-print-page-2">
+                <div className="pk-lampiran-header">
+                  <h3>PERJANJIAN KINERJA</h3>
+                  {isKetua ? (
+                    <h3>KETUA KOMISI PEMILIHAN UMUM KABUPATEN NGAWI</h3>
+                  ) : (
+                    <>
+                      <h3>{(printModal.employee?.position || printModal.agreementLevel || "").toUpperCase()}</h3>
+                      {printModal.employee?.unitSubsection && (
+                        <h3>SUBBAG {printModal.employee.unitSubsection.toUpperCase()}</h3>
+                      )}
+                      <h3>KPU KABUPATEN NGAWI</h3>
+                    </>
+                  )}
+                  <h3>TAHUN {printModal.year}</h3>
+                </div>
+
+                {/* Tabel 1: Sasaran & Indikator Kinerja */}
+                <table className="pk-official-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "40px" }}>No</th>
+                      <th>{isKetua ? "Sasaran Strategis" : "Sasaran Program / Kegiatan"}</th>
+                      <th>Indikator Kinerja</th>
+                      <th style={{ width: "100px" }}>Target</th>
+                    </tr>
+                    <tr className="pk-col-num">
+                      <th>(1)</th>
+                      <th>(2)</th>
+                      <th>(3)</th>
+                      <th>(4)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printModal.objectives && printModal.objectives.length > 0 ? (
+                      printModal.objectives.flatMap((objective: any, n: number) =>
+                        (objective.indicators || []).map((i: any, k: number) => (
+                          <tr key={i.id || `${n}-${k}`}>
+                            {k === 0 && (
+                              <td rowSpan={objective.indicators.length} style={{ textAlign: "center" }}>
+                                {n + 1}.
+                              </td>
+                            )}
+                            {k === 0 && (
+                              <td rowSpan={objective.indicators.length} style={{ verticalAlign: "top" }}>
+                                {objective.objective}
+                              </td>
+                            )}
+                            <td style={{ verticalAlign: "top" }}>{i.indicator}</td>
+                            <td style={{ textAlign: "center", verticalAlign: "top", fontWeight: 600 }}>
+                              {i.targetDisplay || `${i.target} ${i.unit || ""}`.trim()}
+                            </td>
+                          </tr>
+                        ))
+                      )
+                    ) : (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: "center", padding: "12px", color: "#666" }}>
+                          Belum ada sasaran atau indikator kinerja yang ditetapkan.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+
+                {/* Tabel 2: Program & Anggaran */}
+                <table className="pk-official-table pk-budget-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: "40px" }}>No</th>
+                      <th>Program</th>
+                      <th style={{ width: "180px" }}>Anggaran</th>
+                    </tr>
+                    <tr className="pk-col-num">
+                      <th>(1)</th>
+                      <th>(2)</th>
+                      <th>(3)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {effectiveBudgets.length > 0 ? (
+                      effectiveBudgets.map((b: any, n: number) => (
+                        <tr key={b.id || n}>
+                          <td style={{ textAlign: "center" }}>{n + 1}.</td>
+                          <td>{b.programName}{b.outputDescription ? ` — ${b.outputDescription}` : ""}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>
+                            {rupiah(b.amount)}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={3} style={{ textAlign: "center", padding: "10px", color: "#666" }}>
+                          Tidak ada pagu anggaran program.
+                        </td>
+                      </tr>
+                    )}
+                    <tr style={{ fontWeight: "bold", background: "#f8fafc" }}>
+                      <td colSpan={2} style={{ textAlign: "center", fontWeight: "bold" }}>Total Anggaran</td>
+                      <td style={{ textAlign: "right", fontWeight: "bold", whiteSpace: "nowrap" }}>
+                        {rupiah(effectiveBudgetTotal)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {/* Tanda Tangan Lampiran */}
+                {isKetua ? (
+                  <div style={{ marginTop: "40px", display: "flex", justifyContent: "flex-end" }}>
+                    <div style={{ width: "320px", textAlign: "center" }}>
+                      <p style={{ margin: 0 }}>Ngawi, {printDocDate}</p>
+                      <p style={{ margin: "4px 0 0 0", fontWeight: "bold" }}>
+                        KETUA KOMISI PEMILIHAN UMUM<br />KABUPATEN NGAWI,
+                      </p>
+                      <div className="pk-sign-spacer"></div>
+                      <p style={{ margin: 0, fontWeight: "bold", textDecoration: "underline" }}>
+                        {printModal.employee?.fullName?.toUpperCase() || "SAMSU MUSTAKIM"}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: "35px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", textAlign: "center" }}>
+                    <div>
+                      <p style={{ margin: 0, visibility: "hidden" }}>&nbsp;</p>
+                      <p style={{ margin: "4px 0 0 0", fontWeight: "bold" }}>
+                        Pihak Kedua,<br />
+                        {printModal.supervisor?.position || "Atasan Langsung"}<br />
+                        Komisi Pemilihan Umum Kabupaten Ngawi
+                      </p>
+                      <div className="pk-sign-spacer"></div>
+                      <p style={{ margin: 0, fontWeight: "bold", textDecoration: "underline" }}>
+                        {printModal.supervisor?.fullName || "Belum ditentukan"}
+                      </p>
+                    </div>
+                    <div>
+                      <p style={{ margin: 0 }}>Ngawi, {printDocDate}</p>
+                      <p style={{ margin: "4px 0 0 0", fontWeight: "bold" }}>
+                        Pihak Pertama,<br />
+                        {printModal.employee?.position || printModal.agreementLevel}<br />
+                        Komisi Pemilihan Umum Kabupaten Ngawi
+                      </p>
+                      <div className="pk-sign-spacer"></div>
+                      <p style={{ margin: 0, fontWeight: "bold", textDecoration: "underline" }}>
+                        {printModal.employee?.fullName}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </article>
+            </div>
+          </div>
+        );
+      })()}
       {toast && (
         <div className="toast">
           <span>✓</span>

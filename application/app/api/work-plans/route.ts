@@ -5,7 +5,7 @@ import { hasSakipOperator, requireAuthorizedUser } from "../../lib/access";
 import { cleanEvidenceLinks, logSecurityEvent } from "../../lib/security";
 import { organizationData } from "../../lib/organization";
 
-const managers = ["super_user", "super_admin", "admin"];
+const managers = ["super_user", "super_admin", "admin", "operator"];
 const flattenPrograms = (p: any) => (Array.isArray(p.programs) ? p.programs : []).flatMap((program: any, programOrder: number) =>
   (Array.isArray(program.objectives) ? program.objectives : []).flatMap((objective: any, objectiveOrder: number) =>
     (Array.isArray(objective.indicators) ? objective.indicators : []).map((indicator: any, indicatorOrder: number) => ({
