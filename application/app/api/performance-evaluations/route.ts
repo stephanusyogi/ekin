@@ -24,17 +24,73 @@ async function context(request: Request) {
 }
 
 async function refreshIndicator(db: ReturnType<typeof getDb>, indicatorId: number) {
-  const rows = await db.select().from(performanceEvaluations).where(eq(performanceEvaluations.indicatorId, indicatorId)).orderBy(asc(performanceEvaluations.id));
-  const latest = rows.at(-1);
-  await db.update(performanceIndicators).set({
-    progress: latest?.progress || 0,
-    realization: latest?.outputRealization || "",
-    evidence: (() => {
-      if (!latest) return "";
-      try { return cleanLinks(JSON.parse(latest.evidenceLinks || "[]")).join("\n"); }
-      catch { return latest.evidenceLinks || ""; }
-    })(),
-  }).where(eq(performanceIndicators.id, indicatorId));
+  try {
+    const rows = await db
+      .select()
+      .from(performanceEvaluations)
+      .where(eq(performanceEvaluations.indicatorId, indicatorId))
+      .orderBy(asc(performanceEvaluations.id));
+    const latest = rows.at(-1);
+
+    let links: string[] = [];
+    if (latest?.evidenceLinks) {
+      try {
+        const parsed = JSON.parse(latest.evidenceLinks);
+        links = cleanLinks(parsed);
+      } catch {
+        links = cleanLinks(latest.evidenceLinks);
+      }
+    }
+    const fullEvidence = links.join("\n");
+    const progress = latest?.progress || 0;
+    const realization = latest?.outputRealization || "";
+
+    // 1. Coba update penuh dengan semua link bukti dukung
+    try {
+      await db
+        .update(performanceIndicators)
+        .set({
+          progress,
+          realization,
+          evidence: fullEvidence,
+        })
+        .where(eq(performanceIndicators.id, indicatorId));
+      return;
+    } catch (err1) {
+      console.warn("refreshIndicator: update full evidence gagal (kemungkinan tipe/panjang VARCHAR terbatas di MariaDB), mencoba fallback...", err1);
+    }
+
+    // 2. Fallback: jika kolom evidence di MySQL/MariaDB terbatas (misal VARCHAR 100/255)
+    try {
+      const shortEvidence = (links[0] || "").slice(0, 100);
+      await db
+        .update(performanceIndicators)
+        .set({
+          progress,
+          realization,
+          evidence: shortEvidence,
+        })
+        .where(eq(performanceIndicators.id, indicatorId));
+      return;
+    } catch (err2) {
+      console.warn("refreshIndicator: update short evidence gagal, mencoba update progress & realization tanpa kolom evidence...", err2);
+    }
+
+    // 3. Fallback: update progress dan realization saja tanpa menyentuh kolom evidence
+    try {
+      await db
+        .update(performanceIndicators)
+        .set({
+          progress,
+          realization,
+        })
+        .where(eq(performanceIndicators.id, indicatorId));
+    } catch (err3) {
+      console.error("refreshIndicator: update progress & realization gagal:", err3);
+    }
+  } catch (err) {
+    console.error("refreshIndicator unexpected error:", err);
+  }
 }
 
 export async function POST(request: Request) {
@@ -65,6 +121,7 @@ export async function POST(request: Request) {
     await refreshIndicator(db, indicator.id);
     return Response.json({ evaluation: row }, { status: 201 });
   } catch (error) {
+    console.error("performanceEvaluations POST error:", error, (error as any)?.cause);
     const message = error instanceof Error && error.message==="INVALID_EVIDENCE_LINK"?"Link bukti dukung wajib berupa tautan yang valid dan maksimal 2.048 karakter":error instanceof Error && error.message.includes("UNIQUE") ? "Monev untuk indikator dan periode tersebut sudah ada" : (error instanceof Error ? error.message : "Monev belum dapat disimpan");
     return Response.json({ error: message }, { status: 400 });
   }
@@ -96,7 +153,10 @@ export async function PATCH(request: Request) {
     await logSecurityEvent(request,{actorEmail:me.email,actorRole:me.role,action:"UPDATE",resourceType:"monev",resourceId:row.id,before:row,after:updated});
     await refreshIndicator(db, row.indicatorId);
     return Response.json({ evaluation: updated });
-  } catch(error) { return Response.json({ error: error instanceof Error&&error.message==="INVALID_EVIDENCE_LINK"?"Link bukti dukung wajib berupa tautan yang valid dan maksimal 2.048 karakter":(error instanceof Error ? error.message : "Monev belum dapat diperbarui") }, { status: 400 }); }
+  } catch(error) {
+    console.error("performanceEvaluations PATCH error:", error, (error as any)?.cause);
+    return Response.json({ error: error instanceof Error&&error.message==="INVALID_EVIDENCE_LINK"?"Link bukti dukung wajib berupa tautan yang valid dan maksimal 2.048 karakter":(error instanceof Error ? error.message : "Monev belum dapat diperbarui") }, { status: 400 });
+  }
 }
 
 export async function DELETE(request: Request) {

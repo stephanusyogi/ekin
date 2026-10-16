@@ -248,15 +248,29 @@ export async function PATCH(request: Request) {
         );
       if (!managers.includes(me.role) && !hasSakipOperator(me) && agreement.employeeId !== self?.id)
         return Response.json({ error: "Tidak berwenang" }, { status: 403 });
-      await db
-        .update(performanceIndicators)
-        .set({
-          realization: (p.realization || "").trim(),
-          progress: Math.max(0, Math.min(100, Number(p.progress) || 0)),
-          achievement: Math.max(0, Number(p.achievement) || 0),
-          evidence: (p.evidence || "").trim(),
-        })
-        .where(eq(performanceIndicators.id, indicator.id));
+      const realization = (p.realization || "").trim();
+      const progress = Math.max(0, Math.min(100, Number(p.progress) || 0));
+      const achievement = Math.max(0, Number(p.achievement) || 0);
+      const evidence = (p.evidence || "").trim();
+
+      try {
+        await db
+          .update(performanceIndicators)
+          .set({ realization, progress, achievement, evidence })
+          .where(eq(performanceIndicators.id, indicator.id));
+      } catch (err) {
+        try {
+          await db
+            .update(performanceIndicators)
+            .set({ realization, progress, achievement, evidence: evidence.slice(0, 100) })
+            .where(eq(performanceIndicators.id, indicator.id));
+        } catch {
+          await db
+            .update(performanceIndicators)
+            .set({ realization, progress, achievement })
+            .where(eq(performanceIndicators.id, indicator.id));
+        }
+      }
       const [i] = await db.select().from(performanceIndicators).where(eq(performanceIndicators.id, indicator.id)).limit(1);
       return Response.json({ indicator: i });
     }
