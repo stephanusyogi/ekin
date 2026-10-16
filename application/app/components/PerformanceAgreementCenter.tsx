@@ -164,7 +164,8 @@ export default function PerformanceAgreementCenter() {
     }),
     [editing, setEditing] = useState<any>(null),
     [printModal, setPrintModal] = useState<any>(null),
-    [printDocDate, setPrintDocDate] = useState<string>("2 Januari 2026");
+    [printDocDate, setPrintDocDate] = useState<string>("2 Januari 2026"),
+    [printConsolidated, setPrintConsolidated] = useState<boolean>(true);
   const notify = (m: string) => {
       setToast(m);
       setTimeout(() => setToast(""), 2600);
@@ -3137,17 +3138,147 @@ export default function PerformanceAgreementCenter() {
       </article>}
       {printModal && (() => {
         const isKetua = String(printModal.employee?.position || printModal.agreementLevel || "").trim().toLowerCase().includes("ketua");
-        const effectiveBudgets = (printModal.budgets && printModal.budgets.length > 0)
-          ? printModal.budgets
-          : (data.rkt || [])
-              .filter((r: any) => Number(r.year) === Number(printModal.year) && Number(r.budgetAmount) > 0)
-              .reduce((acc: any[], r: any) => {
-                if (!acc.find((b: any) => b.programName === r.programActivity)) {
-                  acc.push({ id: r.id, programName: r.programActivity, amount: Number(r.budgetAmount) || 0 });
+        const targetYear = Number(printModal.year || year);
+        const targetEmpId = Number(printModal.employeeId);
+
+        let displayObjectives: any[] = [];
+        let displayBudgets: any[] = [];
+
+        if (!printConsolidated) {
+          // Cetak hanya item agreement ini saja
+          displayObjectives = printModal.objectives || [];
+          displayBudgets = (printModal.budgets && printModal.budgets.length > 0)
+            ? printModal.budgets
+            : (data.rkt || [])
+                .filter((r: any) => Number(r.year) === targetYear && Number(r.budgetAmount) > 0)
+                .slice(0, 1)
+                .map((r: any) => ({ id: r.id, programName: r.programActivity, amount: Number(r.budgetAmount) || 0 }));
+        } else {
+          // Konsolidasi Dokumen SAKIP Tahunan
+          if (isKetua) {
+            // Untuk Ketua: tarik seluruh sasaran & indikator RKT Ketua tahun tersebut
+            const ketuaRktRows = (data.rkt || []).filter(
+              (r: any) => Number(r.year) === targetYear && (r.rktType === "Ketua" || Number(r.policyOwnerId) === targetEmpId)
+            );
+
+            if (ketuaRktRows.length > 0) {
+              const objMap = new Map<string, any>();
+              ketuaRktRows.forEach((r: any) => {
+                const objTitle = (r.strategicObjective || r.objective || r.programActivity || "Sasaran Strategis").trim();
+                if (!objMap.has(objTitle)) {
+                  objMap.set(objTitle, {
+                    objective: objTitle,
+                    indicators: [],
+                  });
                 }
-                return acc;
-              }, []);
-        const effectiveBudgetTotal = effectiveBudgets.reduce((sum: number, b: any) => sum + (Number(b.amount) || 0), 0);
+                const targetDisp = r.target && r.unit ? `${r.target} ${r.unit}`.trim() : (r.target || "—");
+                objMap.get(objTitle).indicators.push({
+                  id: r.id,
+                  indicator: r.indicator,
+                  target: r.target,
+                  unit: r.unit,
+                  targetDisplay: targetDisp,
+                });
+              });
+              displayObjectives = Array.from(objMap.values());
+            } else {
+              // Fallback: gabung dari seluruh agreement Ketua tahun ini
+              const sameYearAgreements = (data.agreements || []).filter(
+                (a: any) => Number(a.employeeId) === targetEmpId && Number(a.year) === targetYear
+              );
+              const objMap = new Map<string, any>();
+              sameYearAgreements.forEach((agr: any) => {
+                (agr.objectives || []).forEach((obj: any) => {
+                  const objTitle = (obj.objective || "").trim();
+                  if (!objMap.has(objTitle)) {
+                    objMap.set(objTitle, { objective: objTitle, indicators: [] });
+                  }
+                  (obj.indicators || []).forEach((ind: any) => {
+                    const list = objMap.get(objTitle).indicators;
+                    if (!list.some((x: any) => x.indicator === ind.indicator)) {
+                      list.push(ind);
+                    }
+                  });
+                });
+              });
+              displayObjectives = Array.from(objMap.values());
+            }
+
+            // Seluruh program dan pagu anggaran untuk Ketua
+            const programBudgetMap = new Map<string, number>();
+            (data.rkt || [])
+              .filter((r: any) => Number(r.year) === targetYear && (r.rktType === "Ketua" || Number(r.policyOwnerId) === targetEmpId))
+              .forEach((r: any) => {
+                const prog = (r.programActivity || "").trim();
+                const amt = Number(r.budgetAmount) || 0;
+                if (prog) {
+                  programBudgetMap.set(prog, Math.max(programBudgetMap.get(prog) || 0, amt));
+                }
+              });
+
+            // Sinkronkan juga jika ada pagu di tabel performance_budgets
+            (data.agreements || [])
+              .filter((a: any) => Number(a.employeeId) === targetEmpId && Number(a.year) === targetYear)
+              .flatMap((a: any) => a.budgets || [])
+              .forEach((b: any) => {
+                const prog = (b.programName || "").trim();
+                const amt = Number(b.amount) || 0;
+                if (prog && amt > 0) {
+                  programBudgetMap.set(prog, Math.max(programBudgetMap.get(prog) || 0, amt));
+                }
+              });
+
+            displayBudgets = Array.from(programBudgetMap.entries()).map(([programName, amount], idx) => ({
+              id: idx + 1,
+              programName,
+              amount,
+            }));
+          } else {
+            // Untuk Pegawai Lain (Sekretaris, Kasubbag, Staf)
+            const sameYearAgreements = (data.agreements || []).filter(
+              (a: any) => Number(a.employeeId) === targetEmpId && Number(a.year) === targetYear
+            );
+            const objMap = new Map<string, any>();
+            sameYearAgreements.forEach((agr: any) => {
+              (agr.objectives || []).forEach((obj: any) => {
+                const objTitle = (obj.objective || "").trim();
+                if (!objMap.has(objTitle)) {
+                  objMap.set(objTitle, { objective: objTitle, indicators: [] });
+                }
+                (obj.indicators || []).forEach((ind: any) => {
+                  const list = objMap.get(objTitle).indicators;
+                  if (!list.some((x: any) => x.indicator === ind.indicator)) {
+                    list.push(ind);
+                  }
+                });
+              });
+            });
+            displayObjectives = objMap.size > 0 ? Array.from(objMap.values()) : (printModal.objectives || []);
+
+            // Budgets pegawai
+            const budgetMap = new Map<string, number>();
+            sameYearAgreements
+              .flatMap((a: any) => a.budgets || [])
+              .forEach((b: any) => {
+                const key = `${b.programName}${b.outputDescription ? ` — ${b.outputDescription}` : ""}`.trim();
+                const amt = Number(b.amount) || 0;
+                if (key) {
+                  budgetMap.set(key, Math.max(budgetMap.get(key) || 0, amt));
+                }
+              });
+
+            displayBudgets = budgetMap.size > 0
+              ? Array.from(budgetMap.entries()).map(([programName, amount], idx) => ({
+                  id: idx + 1,
+                  programName,
+                  amount,
+                }))
+              : (printModal.budgets || []);
+          }
+        }
+
+        const displayBudgetTotal = displayBudgets.reduce((sum: number, b: any) => sum + (Number(b.amount) || 0), 0);
+        const totalIndicatorsCount = displayObjectives.reduce((sum: number, o: any) => sum + (o.indicators?.length || 0), 0);
 
         return (
           <div className="pk-print-overlay">
@@ -3164,6 +3295,15 @@ export default function PerformanceAgreementCenter() {
                     placeholder="Contoh: 2 Januari 2026"
                   />
                 </div>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#e2e8f0", cursor: "pointer", background: "#334155", padding: "5px 12px", borderRadius: "6px" }}>
+                  <input
+                    type="checkbox"
+                    checked={printConsolidated}
+                    onChange={(e) => setPrintConsolidated(e.target.checked)}
+                    style={{ cursor: "pointer" }}
+                  />
+                  <span>Gabungkan Semua Sasaran Tahun Ini ({totalIndicatorsCount} Indikator)</span>
+                </label>
               </div>
               <div className="pk-print-toolbar-right">
                 <button
@@ -3188,7 +3328,7 @@ export default function PerformanceAgreementCenter() {
               {/* === HALAMAN 1: NASKAH PERJANJIAN KINERJA === */}
               <article className="pk-print-page pk-print-page-1">
                 <div className="pk-official-header">
-                  <img src="/kpu-logo.png" alt="Logo KPU" className="pk-official-logo" />
+                  <img src="/logo_kpu.png" alt="Logo KPU" className="pk-official-logo" />
                   <h2>KOMISI PEMILIHAN UMUM<br />KABUPATEN NGAWI</h2>
                   <h3>PERJANJIAN KINERJA TAHUN {printModal.year}</h3>
                 </div>
@@ -3343,12 +3483,12 @@ export default function PerformanceAgreementCenter() {
                     </tr>
                   </thead>
                   <tbody>
-                    {printModal.objectives && printModal.objectives.length > 0 ? (
-                      printModal.objectives.flatMap((objective: any, n: number) =>
+                    {displayObjectives && displayObjectives.length > 0 ? (
+                      displayObjectives.flatMap((objective: any, n: number) =>
                         (objective.indicators || []).map((i: any, k: number) => (
                           <tr key={i.id || `${n}-${k}`}>
                             {k === 0 && (
-                              <td rowSpan={objective.indicators.length} style={{ textAlign: "center" }}>
+                              <td rowSpan={objective.indicators.length} style={{ textAlign: "center", width: "40px" }}>
                                 {n + 1}.
                               </td>
                             )}
@@ -3358,7 +3498,7 @@ export default function PerformanceAgreementCenter() {
                               </td>
                             )}
                             <td style={{ verticalAlign: "top" }}>{i.indicator}</td>
-                            <td style={{ textAlign: "center", verticalAlign: "top", fontWeight: 600 }}>
+                            <td style={{ textAlign: "center", verticalAlign: "top", fontWeight: 600, width: "100px" }}>
                               {i.targetDisplay || `${i.target} ${i.unit || ""}`.trim()}
                             </td>
                           </tr>
@@ -3389,12 +3529,12 @@ export default function PerformanceAgreementCenter() {
                     </tr>
                   </thead>
                   <tbody>
-                    {effectiveBudgets.length > 0 ? (
-                      effectiveBudgets.map((b: any, n: number) => (
+                    {displayBudgets.length > 0 ? (
+                      displayBudgets.map((b: any, n: number) => (
                         <tr key={b.id || n}>
-                          <td style={{ textAlign: "center" }}>{n + 1}.</td>
+                          <td style={{ textAlign: "center", width: "40px" }}>{n + 1}.</td>
                           <td>{b.programName}{b.outputDescription ? ` — ${b.outputDescription}` : ""}</td>
-                          <td style={{ textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>
+                          <td style={{ textAlign: "right", fontWeight: 600, whiteSpace: "nowrap", width: "180px" }}>
                             {rupiah(b.amount)}
                           </td>
                         </tr>
@@ -3409,7 +3549,7 @@ export default function PerformanceAgreementCenter() {
                     <tr style={{ fontWeight: "bold", background: "#f8fafc" }}>
                       <td colSpan={2} style={{ textAlign: "center", fontWeight: "bold" }}>Total Anggaran</td>
                       <td style={{ textAlign: "right", fontWeight: "bold", whiteSpace: "nowrap" }}>
-                        {rupiah(effectiveBudgetTotal)}
+                        {rupiah(displayBudgetTotal)}
                       </td>
                     </tr>
                   </tbody>
