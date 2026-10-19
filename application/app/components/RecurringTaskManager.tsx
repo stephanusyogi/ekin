@@ -1,5 +1,5 @@
 "use client";
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 type Template={id:number;title:string;unit:string;frequency:string;generationDay:number;dueOffsetDays:number;startDate:string;status:"Aktif"|"Dijeda"|"Nonaktif";picEmails:string};
 type Task={id:number;title:string;unit:string;picEmails:string;priority:string;outputType:string;sourcePerformanceAgreementId:number|null;sourcePerformanceIndicatorId:number|null;sourcePkLabel?:string;createdBy:string;approvalStatus:string;approvalNote:string;deadline:string;extendedDeadline:string;status:string;progress:number;output:string;notes:string;verificationStatus:string;recurringTemplateId:number|null};
 type ProgressUpdate={id:number;employeeEmail:string;progress:number;outputRealization:string;completedActivities:string;obstacles:string;notes:string;createdAt:string};
@@ -18,7 +18,30 @@ const OUTPUT_CATEGORIES=[
  ["Jadwal","Agenda rapat, timeline, jadwal kerja"],
  ["Hasil kegiatan","Rapat terlaksana, pengadaan selesai, kegiatan terdokumentasi"],
  ["Rekomendasi","Hasil analisis, evaluasi, usulan perbaikan"],
+ ["Lain-lain","Kategori output pekerjaan lainnya yang belum tercakup di atas"],
 ] as const;
+
+function parseOutputCategories(raw:string){
+ if(!raw)return{selected:["Dokumen"],otherText:""};
+ const parts=raw.split(/,\s*/),selected:string[]=[];let otherText="";
+ for(const part of parts){
+  const trimmed=part.trim();if(!trimmed)continue;
+  if(trimmed.startsWith("Lain-lain")||trimmed.startsWith("Lainnya")){
+   if(!selected.includes("Lain-lain"))selected.push("Lain-lain");
+   const colonMatch=trimmed.match(/^Lain-(?:lain|nya):\s*(.*)$/),parenMatch=trimmed.match(/^Lain-(?:lain|nya)\s*\((.*)\)$/);
+   if(colonMatch)otherText=colonMatch[1].trim();else if(parenMatch)otherText=parenMatch[1].trim();
+  }else{
+   if(!selected.includes(trimmed))selected.push(trimmed);
+  }
+ }
+ return{selected:selected.length?selected:["Dokumen"],otherText};
+}
+
+function serializeOutputCategories(selected:string[],otherText:string):string{
+ if(!selected.length)return"Dokumen";
+ const list=selected.map(cat=>{if(cat==="Lain-lain"){const clean=otherText.trim();return clean?`Lain-lain (${clean})`:"Lain-lain"}return cat});
+ return list.join(", ");
+}
 export default function RecurringTaskManager(){
  const [tasks,setTasks]=useState<Task[]>([]),[templates,setTemplates]=useState<Template[]>([]),[assignees,setAssignees]=useState<Assignee[]>([]),[units,setUnits]=useState<OrgUnit[]>([]),[performanceSources,setPerformanceSources]=useState<PerformanceSource[]>([]),[form,setForm]=useState(fresh()),[showForm,setShowForm]=useState(false),[editing,setEditing]=useState<Task|null>(null),[canManageRecurring,setCanManageRecurring]=useState(false),[canCreate,setCanCreate]=useState(false),[canAdmin,setCanAdmin]=useState(false),[saving,setSaving]=useState(false),[message,setMessage]=useState(""),[q,setQ]=useState(""),[status,setStatus]=useState("Semua"),[unitFilter,setUnitFilter]=useState("Semua"),[priorityFilter,setPriorityFilter]=useState("Semua"),[typeFilter,setTypeFilter]=useState("Semua"),[deadlineFilter,setDeadlineFilter]=useState("Semua"),[page,setPage]=useState(1);
  const [currentEmail,setCurrentEmail]=useState(""),[progressTask,setProgressTask]=useState<Task|null>(null),[progressHistory,setProgressHistory]=useState<ProgressUpdate[]>([]),[progressForm,setProgressForm]=useState({progress:0,outputRealization:"",completedActivities:"",obstacles:"",notes:""});
@@ -54,7 +77,119 @@ function CreateModal({form,setForm,units,assignees,performanceSources,canRecurri
 function EditModal({task,setTask,units,assignees,performanceSources,close,save,saving,message}:any){const emails=parsePics(task.picEmails),toggle=(email:string)=>setTask({...task,picEmails:JSON.stringify(emails.includes(email)?emails.filter((x:string)=>x!==email):[...emails,email])});return <div className="modal-backdrop" onMouseDown={close}><div className="modal todo-form-modal" role="dialog" aria-modal="true" onMouseDown={e=>e.stopPropagation()}><span>SUPER ADMIN · EDIT TO-DO</span><Title title="Perbaiki data pekerjaan" close={close}/><div className="module-form two-col"><BaseFields value={task} setValue={setTask} units={units}/><label>Deadline<input type="date" value={task.deadline||""} onChange={e=>setTask({...task,deadline:e.target.value})}/></label><label>Perpanjangan deadline<input type="date" value={task.extendedDeadline||""} onChange={e=>setTask({...task,extendedDeadline:e.target.value})}/></label><label>Status<select value={task.status} onChange={e=>setTask({...task,status:e.target.value})}>{["Baru","Ditolak","Dikerjakan","Menunggu Verifikasi","Verifikasi Final","Perbaikan","Selesai"].map(x=><option key={x}>{x}</option>)}</select></label><label>Progress (%)<input type="number" min="0" max="100" value={task.progress} onChange={e=>setTask({...task,progress:Number(e.target.value)})}/></label><label>Verifikasi<select value={task.verificationStatus} onChange={e=>setTask({...task,verificationStatus:e.target.value})}><option>Belum Diverifikasi</option><option>Menunggu Verifikasi</option><option>Terverifikasi</option><option>Perlu Perbaikan</option></select></label><PerformanceSourcePicker value={task.sourcePerformanceIndicatorId} sources={performanceSources} change={(source:PerformanceSource|null)=>setTask({...task,sourcePerformanceAgreementId:source?.agreementId||null,sourcePerformanceIndicatorId:source?.indicatorId||null})}/><OutputCategoryPicker value={task.outputType||"Dokumen"} change={(outputType:string)=>setTask({...task,outputType})}/><label className="wide">Output<input value={task.output||""} onChange={e=>setTask({...task,output:e.target.value})}/></label><label className="wide">Catatan<textarea rows={3} value={task.notes||""} onChange={e=>setTask({...task,notes:e.target.value})}/></label><PicPicker emails={emails} assignees={assignees} toggle={toggle}/></div><Actions close={close} save={save} saving={saving} label="Simpan Perubahan" message={message}/></div></div>}
 function BaseFields({value,setValue,units}:any){return <><label>Uraian<input value={value.title} onChange={e=>setValue({...value,title:e.target.value})}/></label><label>Unit/Subbagian<select value={value.unit} onChange={e=>setValue({...value,unit:e.target.value})}><option value="">Pilih Struktur Organisasi</option>{units.map((u:OrgUnit)=><option key={u.id} value={u.name}>{u.name} · {u.type}</option>)}</select></label><label>Prioritas<select value={value.priority} onChange={e=>setValue({...value,priority:e.target.value})}>{["Rendah","Sedang","Tinggi","Urgent"].map(x=><option key={x}>{x}</option>)}</select></label></>}
 function PicPicker({emails,assignees,toggle}:any){return <fieldset className="pic-picker wide"><legend>PIC/Penanggung Jawab</legend><div>{assignees.map((p:Assignee)=><label key={p.id} className={emails.includes(p.email)?"selected":""}><input type="checkbox" checked={emails.includes(p.email)} onChange={()=>toggle(p.email)}/><span><b>{p.fullName}{p.isSelf?" (Saya)":""}</b><small>{p.position||"Pegawai"} · {p.unit}</small></span></label>)}</div></fieldset>}
-function PerformanceSourcePicker({value,sources,change}:any){return <label className="wide pk-source-field">Sumber Perjanjian Kinerja<select value={value||""} onChange={e=>change(sources.find((source:PerformanceSource)=>source.indicatorId===Number(e.target.value))||null)}><option value="">Tidak terhubung dengan PK</option>{sources.map((source:PerformanceSource)=><option key={source.indicatorId} value={source.indicatorId}>{source.year} · {source.ownerPosition} — {source.objective} — {source.indicator} ({source.target})</option>)}</select><small>Hanya PK yang berada pada jalur koordinasi Anda yang tersedia.</small></label>}
-function OutputCategoryPicker({value,change}:any){return <fieldset className="output-category-picker wide"><legend>Kategori Pekerjaan</legend><p>Pilih kategori berdasarkan bentuk output yang akan dihasilkan.</p><div>{OUTPUT_CATEGORIES.map(([name,example])=><label key={name} className={value===name?"selected":""}><input type="radio" name="output-category" checked={value===name} onChange={()=>change(name)}/><span><b>{name}</b><small>{example}</small></span></label>)}</div></fieldset>}
+function PerformanceSourcePicker({value,sources,change}:any){
+ const [open,setOpen]=useState(false),[search,setSearch]=useState("");
+ const containerRef=useRef<HTMLDivElement>(null);
+ const selected=sources.find((s:PerformanceSource)=>s.indicatorId===value);
+
+ useEffect(()=>{
+  const handleOutside=(e:MouseEvent)=>{if(containerRef.current&&!containerRef.current.contains(e.target as Node)){setOpen(false)}};
+  if(open)document.addEventListener("mousedown",handleOutside);
+  return()=>document.removeEventListener("mousedown",handleOutside);
+ },[open]);
+
+ const filtered=sources.filter((s:PerformanceSource)=>{
+  if(!search.trim())return true;
+  const q=search.toLowerCase();
+  return s.indicator.toLowerCase().includes(q)||s.objective.toLowerCase().includes(q)||s.ownerPosition.toLowerCase().includes(q)||s.ownerName.toLowerCase().includes(q)||String(s.year).includes(q)||(s.target&&s.target.toLowerCase().includes(q));
+ });
+
+ return (
+  <div className="wide pk-source-field" ref={containerRef}>
+   <span className="pk-field-label">Sumber Perjanjian Kinerja (PK)</span>
+   <div className="pk-searchable-field">
+    <div className={`pk-searchable-trigger ${selected?"has-value":""}`} role="button" tabIndex={0} onClick={()=>setOpen(!open)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setOpen(!open)}}}>
+     <div className="pk-trigger-content">
+      {selected?(
+       <>
+        <span className="pk-trigger-badge">PK {selected.year} · {selected.ownerPosition}</span>
+        <span className="pk-trigger-indicator">{selected.indicator}</span>
+        <small className="pk-trigger-sub">Sasaran: {selected.objective} {selected.target?`(Target: ${selected.target})`:""}</small>
+       </>
+      ):(
+       <span className="pk-trigger-placeholder">Pilih Sumber PK (atau Tidak terhubung)...</span>
+      )}
+     </div>
+     <div className="pk-trigger-actions">
+      {selected&&<button type="button" className="pk-clear-btn" title="Batalkan hubungan PK" onClick={e=>{e.stopPropagation();change(null)}}>✕ Lepas</button>}
+      <span className="pk-chevron">{open?"▲":"▼"}</span>
+     </div>
+    </div>
+    {open&&(
+     <div className="pk-dropdown-panel" onMouseDown={e=>e.stopPropagation()}>
+      <div className="pk-search-input-wrap">
+       <input type="text" className="pk-search-input" autoFocus placeholder="🔍 Ketik untuk mencari sasaran, indikator, posisi, atau tahun PK..." value={search} onChange={e=>setSearch(e.target.value)}/>
+      </div>
+      <div className="pk-options-list">
+       <div className={`pk-option-none ${!value?"selected":""}`} onClick={()=>{change(null);setOpen(false);setSearch("")}}>
+        ✕ Tidak terhubung dengan PK
+       </div>
+       {filtered.map((s:PerformanceSource)=>{
+        const isItemActive=s.indicatorId===value;
+        return (
+         <div key={s.indicatorId} className={`pk-option-item ${isItemActive?"selected":""}`} onClick={()=>{change(s);setOpen(false);setSearch("")}}>
+          <div className="pk-option-top">
+           <span>Tahun {s.year} · {s.ownerPosition}</span>
+           {s.target&&<span>Target: {s.target}</span>}
+          </div>
+          <div className="pk-option-title">{s.indicator}</div>
+          <div className="pk-option-detail">Sasaran: {s.objective}</div>
+         </div>
+        );
+       })}
+       {filtered.length===0&&<div className="pk-option-empty">Tidak ditemukan indikator PK yang cocok dengan "{search}".</div>}
+      </div>
+     </div>
+    )}
+   </div>
+   <small className="pk-field-hint">Hanya PK yang berada pada jalur koordinasi Anda yang tersedia.</small>
+  </div>
+ );
+}
+function OutputCategoryPicker({value,change}:any){
+ const {selected,otherText}=parseOutputCategories(value);
+ const toggleCategory=(cat:string)=>{
+  let next:string[];
+  if(selected.includes(cat)){
+   next=selected.filter(x=>x!==cat);
+   if(!next.length)next=["Dokumen"];
+  }else{
+   next=[...selected,cat];
+  }
+  change(serializeOutputCategories(next,otherText));
+ };
+ const updateOtherText=(text:string)=>{
+  change(serializeOutputCategories(selected,text));
+ };
+
+ return (
+  <fieldset className="output-category-picker wide">
+   <legend>Kategori Pekerjaan (Bisa pilih lebih dari satu)</legend>
+   <p>Pilih satu atau lebih kategori berdasarkan bentuk output yang akan dihasilkan.</p>
+   <div>
+    {OUTPUT_CATEGORIES.map(([name,example])=>{
+     const isSelected=selected.includes(name);
+     return (
+      <label key={name} className={isSelected?"selected":""}>
+       <input type="checkbox" name="output-category" checked={isSelected} onChange={()=>toggleCategory(name)}/>
+       <span>
+        <b>{name}</b>
+        <small>{example}</small>
+       </span>
+      </label>
+     );
+    })}
+   </div>
+   {selected.includes("Lain-lain")&&(
+    <div className="output-other-input-wrap">
+     <label>
+      Keterangan Kategori Pekerjaan Lainnya
+      <input type="text" placeholder="Contoh: Aplikasi web, publikasi media, spanduk, dll." value={otherText} onChange={e=>updateOtherText(e.target.value)}/>
+     </label>
+    </div>
+   )}
+  </fieldset>
+ );
+}
 function Title({title,close}:any){return <div className="modal-title-row"><div><h3>{title}</h3><p>Perubahan disimpan ke database To-Do.</p></div><button aria-label="Tutup" onClick={close}>×</button></div>}
 function Actions({close,save,saving,label,message}:any){return <>{message&&<p className="form-message">{message}</p>}<div className="modal-actions"><button onClick={close}>Batal</button><button className="primary" onClick={save} disabled={saving}>{saving?"Menyimpan...":label}</button></div></>}
