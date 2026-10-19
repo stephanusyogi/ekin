@@ -15,16 +15,43 @@ const picsOf = (task: typeof tasks.$inferSelect) => {
 };
 
 export async function GET(request: Request) {
-  const user=await requireAuthorizedUser(request); await generateRecurringTasks();
-  const all=await getDb().select().from(tasks).orderBy(desc(tasks.createdAt));
-  const rows=all.filter(task=>picsOf(task).map(x=>x.toLowerCase()).includes(user.email.toLowerCase())).slice(0,50);
-  const taskId=Number(new URL(request.url).searchParams.get("taskId")||0);
-  if(taskId){
-    const task=rows.find(row=>row.id===taskId);
-    if(!task)return Response.json({error:"To-Do tidak ditemukan atau bukan tanggung jawab Anda"},{status:404});
-    const history=await getDb().select().from(taskProgressUpdates).where(eq(taskProgressUpdates.taskId,taskId)).orderBy(desc(taskProgressUpdates.createdAt)).limit(20);
-    return Response.json({task,history});
+  const user = await requireAuthorizedUser(request);
+  await generateRecurringTasks();
+  const url = new URL(request.url);
+  const taskId = Number(url.searchParams.get("taskId") || 0);
+
+  if (taskId) {
+    const [task] = await getDb().select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+    if (!task) return Response.json({ error: "To-Do tidak ditemukan" }, { status: 404 });
+
+    const isPic = picsOf(task).map(x => x.toLowerCase()).includes(user.email.toLowerCase());
+    const isCreator = task.createdBy.toLowerCase() === user.email.toLowerCase();
+    const isAdmin = ["super_user", "super_admin", "admin"].includes(user.role);
+
+    let isAuthorized = isPic || isCreator || isAdmin || hasSakipOperator(user);
+    if (!isAuthorized) {
+      const allEmployees = await getDb().select().from(employees);
+      const currentUserEmp = allEmployees.find(e => e.email?.toLowerCase() === user.email.toLowerCase());
+      if (currentUserEmp) {
+        const picEmails = picsOf(task).map(x => x.toLowerCase());
+        const subordinates = allEmployees.filter(e => e.directSupervisorId === currentUserEmp.id && e.email);
+        const subordinateEmails = subordinates.map(e => e.email!.toLowerCase());
+        if (subordinateEmails.includes(task.createdBy.toLowerCase()) || picEmails.some(p => subordinateEmails.includes(p))) {
+          isAuthorized = true;
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      return Response.json({ error: "To-Do tidak ditemukan atau berada di luar kewenangan Anda" }, { status: 403 });
+    }
+
+    const history = await getDb().select().from(taskProgressUpdates).where(eq(taskProgressUpdates.taskId, taskId)).orderBy(desc(taskProgressUpdates.createdAt)).limit(50);
+    return Response.json({ task, history });
   }
+
+  const all = await getDb().select().from(tasks).orderBy(desc(tasks.createdAt));
+  const rows = all.filter(task => picsOf(task).map(x => x.toLowerCase()).includes(user.email.toLowerCase())).slice(0, 100);
   return Response.json({ tasks: rows });
 }
 
@@ -46,7 +73,8 @@ export async function POST(request: Request) {
   if(Boolean(requestedIndicatorId)!==Boolean(requestedAgreementId))return Response.json({error:"Pilih sumber PK dan indikator yang lengkap"},{status:400});
   if(requestedIndicatorId){const permitted=(await allowedTaskPerformanceSources(user)).some(source=>source.indicatorId===requestedIndicatorId&&source.agreementId===requestedAgreementId);if(!permitted)return Response.json({error:"PK berada di luar jalur koordinasi Anda"},{status:403})}
   const outputTypes=["Dokumen","Laporan","Data","File spreadsheet","Presentasi","Komunikasi","Arsip","Jadwal","Hasil kegiatan","Rekomendasi"],outputType=outputTypes.includes(payload.outputType||"")?payload.outputType!:"Dokumen";
-  const needsApproval=user.role==="user";
+  const isSupervisorOrAdmin = ["super_user", "super_admin", "admin", "editor"].includes(user.role);
+  const needsApproval = !isSupervisorOrAdmin;
   const [res] = await getDb().insert(tasks).values({ ownerEmail:pics[0], createdBy:user.email, title, unit, picEmails:JSON.stringify(pics), priority:payload.priority||"Sedang", outputType, sourcePerformanceAgreementId:requestedAgreementId||null, sourcePerformanceIndicatorId:requestedIndicatorId||null, deadline:payload.deadline||"", due:payload.deadline||"Belum ditentukan", output:payload.output?.trim()||"", notes:payload.notes?.trim()||"", status:"Baru",approvalStatus:needsApproval?"Draft":"Tidak Perlu Persetujuan" });
   const [task] = await getDb().select().from(tasks).where(eq(tasks.id, res.insertId)).limit(1);
   return Response.json({ task }, { status: 201 });
@@ -80,7 +108,7 @@ export async function PATCH(request: Request) {
   }
   if(["approve","reject","needs_revision"].includes(payload.action||"")){
     const allEmployees=await getDb().select().from(employees),creator=allEmployees.find(e=>e.email?.toLowerCase()===before.createdBy.toLowerCase()),approver=allEmployees.find(e=>e.email?.toLowerCase()===user.email.toLowerCase());
-    const allowed=["super_user","super_admin"].includes(user.role)||Boolean(creator&&approver&&creator.directSupervisorId===approver.id);
+    const allowed=["super_user","super_admin","admin"].includes(user.role)||Boolean(creator&&approver&&creator.directSupervisorId===approver.id)||Boolean(approver&&(approver.position==="Sekretaris"||approver.position==="Ketua"));
     if(!allowed)return Response.json({error:"Hanya atasan langsung yang dapat memutuskan"},{status:403});
     const note=payload.decisionNote?.trim()||"";if(payload.action!=="approve"&&!note)return Response.json({error:"Catatan keputusan wajib diisi"},{status:400});
     const approved=payload.action==="approve",approvalStatus=approved?"Disetujui":payload.action==="reject"?"Ditolak":"Perlu Perbaikan";
@@ -91,7 +119,7 @@ export async function PATCH(request: Request) {
   }
   if(["verify_complete","verify_revision"].includes(payload.action||"")){
     const allEmployees=await getDb().select().from(employees),approver=allEmployees.find(e=>e.email?.toLowerCase()===user.email.toLowerCase()),picEmails=picsOf(before).map(x=>x.toLowerCase()),picRows=allEmployees.filter(e=>e.email&&picEmails.includes(e.email.toLowerCase()));
-    const allowed=["super_user","super_admin"].includes(user.role)||Boolean(approver&&picRows.some(pic=>pic.directSupervisorId===approver.id));
+    const allowed=["super_user","super_admin","admin"].includes(user.role)||Boolean(approver&&picRows.some(pic=>pic.directSupervisorId===approver.id))||Boolean(approver&&(approver.position==="Sekretaris"||approver.position==="Ketua"));
     if(!allowed)return Response.json({error:"Hanya atasan langsung PIC yang dapat memverifikasi hasil akhir"},{status:403});
     if(before.status!=="Verifikasi Final"&&before.verificationStatus!=="Menunggu Verifikasi")return Response.json({error:"To-Do belum berada pada tahap verifikasi final"},{status:409});
     const completed=payload.action==="verify_complete",note=payload.decisionNote?.trim()||"";if(!completed&&!note)return Response.json({error:"Catatan perbaikan wajib diisi"},{status:400});
@@ -103,7 +131,9 @@ export async function PATCH(request: Request) {
   if(payload.progress === undefined)return Response.json({error:"Progress wajib diisi"},{status:400});
   if(!before||!picsOf(before).map(x=>x.toLowerCase()).includes(user.email.toLowerCase()))return Response.json({error:"Hanya PIC pekerjaan yang dapat memperbarui progres"},{status:403});
   if(["Draft","Menunggu Persetujuan","Ditolak","Perlu Perbaikan"].includes(before.approvalStatus))return Response.json({error:"To-Do harus disetujui sebelum progress diperbarui"},{status:409});
-  const progress = Math.max(0, Math.min(100, Math.round(Number(payload.progress))));
+  const rawProgress = Number(payload.progress);
+  if (isNaN(rawProgress)) return Response.json({ error: "Nilai progress tidak valid" }, { status: 400 });
+  const progress = Math.max(0, Math.min(100, Math.round(rawProgress)));
   const outputRealization=payload.outputRealization?.trim()||"";
   const completedActivities=payload.completedActivities?.trim()||"";
   const obstacles=payload.obstacles?.trim()||"";

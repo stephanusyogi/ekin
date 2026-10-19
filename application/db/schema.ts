@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  index,
   int,
   mysqlTable,
   text,
@@ -48,22 +49,31 @@ export const tasks = mysqlTable(
       table.recurringTemplateId,
       table.recurringPeriodKey,
     ),
+    index("idx_task_owner").on(table.ownerEmail),
+    index("idx_task_status").on(table.status),
+    index("idx_task_source_pk").on(table.sourcePerformanceAgreementId),
   ],
 );
 
-export const taskProgressUpdates = mysqlTable("task_progress_updates", {
-  id: bigint("id", { mode: "number" }).primaryKey().autoincrement(),
-  taskId: bigint("task_id", { mode: "number" }).notNull(),
-  employeeEmail: varchar("employee_email", { length: 255 }).notNull(),
-  progress: int("progress").notNull(),
-  outputRealization: text("output_realization").notNull(),
-  completedActivities: text("completed_activities").notNull(),
-  obstacles: text("obstacles").notNull(),
-  notes: text("notes").notNull(),
-  createdAt: varchar("created_at", { length: 255 })
-    .notNull()
-    .default(sql`CURRENT_TIMESTAMP`),
-});
+export const taskProgressUpdates = mysqlTable(
+  "task_progress_updates",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().autoincrement(),
+    taskId: bigint("task_id", { mode: "number" }).notNull(),
+    employeeEmail: varchar("employee_email", { length: 255 }).notNull(),
+    progress: int("progress").notNull(),
+    outputRealization: text("output_realization").notNull(),
+    completedActivities: text("completed_activities").notNull(),
+    obstacles: text("obstacles").notNull(),
+    notes: text("notes").notNull(),
+    createdAt: varchar("created_at", { length: 255 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("idx_task_progress_task").on(table.taskId),
+  ],
+);
 
 export const activityAgendas = mysqlTable("activity_agendas", {
   id: bigint("id", { mode: "number" }).primaryKey().autoincrement(),

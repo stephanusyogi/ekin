@@ -1718,14 +1718,14 @@ export default function Home() {
             <h3>{progressTask.title}</h3>
             <p>Catat perkembangan aktual pekerjaan. Progress 100% akan dikirim kepada atasan untuk diperiksa.</p>
             <div className="module-form two-col">
-              <label>Progress (%)<input type="number" min="0" max="100" value={progressForm.progress} onChange={(e)=>setProgressForm({...progressForm,progress:Math.max(0,Math.min(100,Number(e.target.value)))})}/></label>
+              <label>Progress (%)<input type="number" min="0" max="100" value={isNaN(progressForm.progress) ? "" : progressForm.progress} onChange={(e) => { const val = e.target.value; setProgressForm({...progressForm, progress: val === "" ? 0 : Math.max(0, Math.min(100, Number(val)))}); }}/></label>
               <label>Status sistem<input value={progressForm.progress===100?"Verifikasi Final":"Dikerjakan"} disabled/></label>
               <label className="wide">Kegiatan yang sudah dilaksanakan<textarea rows={3} value={progressForm.completedActivities} onChange={(e)=>setProgressForm({...progressForm,completedActivities:e.target.value})} placeholder="Jelaskan pekerjaan yang sudah dilakukan pada pembaruan ini"/></label>
               <label className="wide">Realisasi output<textarea rows={3} value={progressForm.outputRealization} onChange={(e)=>setProgressForm({...progressForm,outputRealization:e.target.value})} placeholder="Hasil atau output yang telah tersedia"/></label>
               <label className="wide">Kendala<textarea rows={2} value={progressForm.obstacles} onChange={(e)=>setProgressForm({...progressForm,obstacles:e.target.value})} placeholder="Kosongkan jika tidak ada kendala"/></label>
               <label className="wide">Catatan tambahan<textarea rows={2} value={progressForm.notes} onChange={(e)=>setProgressForm({...progressForm,notes:e.target.value})}/></label>
             </div>
-            {progressHistory.length>0&&<div className="progress-history"><h4>Riwayat Pembaruan</h4>{progressHistory.slice(0,5).map(row=><article key={row.id}><b>{row.progress}%</b><div><strong>{row.completedActivities}</strong><small>{row.employeeEmail} · {new Date(row.createdAt+"Z").toLocaleString("id-ID")}</small>{row.obstacles&&<small>Kendala: {row.obstacles}</small>}</div></article>)}</div>}
+            {progressHistory.length>0&&<div className="progress-history"><h4>Riwayat Pembaruan</h4>{progressHistory.slice(0,5).map(row=>{const clean=row.createdAt?.includes("T")?row.createdAt:row.createdAt?.replace(" ","T");const d=clean?new Date(clean):null;const formattedTime=d&&!isNaN(d.getTime())?d.toLocaleString("id-ID"):(row.createdAt||"-");return <article key={row.id}><b>{row.progress}%</b><div><strong>{row.completedActivities}</strong><small>{row.employeeEmail} · {formattedTime}</small>{row.obstacles&&<small>Kendala: {row.obstacles}</small>}</div></article>})}</div>}
             <div className="modal-actions"><button onClick={()=>setProgressTask(null)}>Batal</button><button className="primary" onClick={saveProgress} disabled={saving}>{saving?"Menyimpan...":"Simpan Progress"}</button></div>
           </div>
         </div>

@@ -31,17 +31,18 @@ export async function GET(request: Request) {
   else if (employee?.position === "Ketua") { visible = allTasks; scope = "Ringkasan seluruh lembaga"; }
   else if (employee?.position === "Anggota") { const links = await db.select().from(organizationCoordinations).where(eq(organizationCoordinations.commissionerEmployeeId, employee.id)); allowedUnits = links.map(x => x.unitSubsection); visible = allTasks.filter(t => allowedUnits.includes(t.unit)); scope = "Subbagian dalam garis koordinasi"; }
   else if (identity.role === "editor" || employee?.position.toLowerCase().includes("kasubag")) {
-    allowedUnits = [employee!.unitSubsection];
+    const employeeUnit = employee?.unitSubsection || "";
+    allowedUnits = employeeUnit ? [employeeUnit] : [];
     visible = allTasks.filter(task =>
-      task.unit === employee!.unitSubsection ||
+      (employeeUnit && task.unit === employeeUnit) ||
       task.createdBy.toLowerCase() === identity.email.toLowerCase() ||
       createdByDirectReport(task) ||
       assignedToDirectReport(task),
     );
-    scope = `PIC bawahan langsung dan Unit ${employee!.unitSubsection}`;
+    scope = `PIC bawahan langsung dan Unit ${employeeUnit || "Kerja"}`;
   }
   const canApproveTaskIds = visible
-    .filter(task => ["super_user", "super_admin"].includes(identity.role) || createdByDirectReport(task) || assignedToDirectReport(task))
+    .filter(task => ["super_user", "super_admin", "admin"].includes(identity.role) || employee?.position === "Sekretaris" || employee?.position === "Ketua" || createdByDirectReport(task) || assignedToDirectReport(task))
     .map(task => task.id);
   const sourceIndicatorIds=visible.map(task=>task.sourcePerformanceIndicatorId).filter((id):id is number=>Boolean(id));
   const sourceIndicators=sourceIndicatorIds.length?await db.select().from(performanceIndicators).where(inArray(performanceIndicators.id,sourceIndicatorIds)):[];
