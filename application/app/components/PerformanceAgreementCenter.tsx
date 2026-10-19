@@ -162,6 +162,7 @@ export default function PerformanceAgreementCenter() {
       notes: "",
       status: "Aktif",
     }),
+    [actionForm, setActionForm] = useState<any>(blankActionForm()),
     [editing, setEditing] = useState<any>(null),
     [printModal, setPrintModal] = useState<any>(null),
     [printDocDate, setPrintDocDate] = useState<string>("2 Januari 2026"),
