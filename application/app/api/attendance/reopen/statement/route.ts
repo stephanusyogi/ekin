@@ -10,7 +10,11 @@ export async function GET(request:Request){
   const db=getDb(),[row]=await db.select().from(attendanceReopenRequests).where(eq(attendanceReopenRequests.id,id)).limit(1);
   if(!row?.statementFileKey)return Response.json({error:"Dokumen tidak ditemukan"},{status:404});
   const staff=await db.select().from(employees),employee=staff.find(e=>e.email?.toLowerCase()===row.employeeEmail.toLowerCase()),viewer=staff.find(e=>e.email?.toLowerCase()===me.email.toLowerCase());
-  const allowed=row.employeeEmail.toLowerCase()===me.email.toLowerCase()||["super_user","super_admin"].includes(me.role)||Boolean(employee&&viewer&&employee.directSupervisorId===viewer.id);
+  const isSuper=["super_user","super_admin"].includes(me.role);
+  const isSekretaris=viewer?.position?.trim().toLowerCase()==="sekretaris";
+  const isDirectSupervisor=Boolean(employee&&viewer&&employee.directSupervisorId===viewer.id);
+  const isOwner=row.employeeEmail.toLowerCase()===me.email.toLowerCase();
+  const allowed=isOwner||isSuper||isSekretaris||isDirectSupervisor;
   if(!allowed)return Response.json({error:"Anda tidak berwenang melihat dokumen ini"},{status:403});
   const buffer=await getFile(row.statementFileKey);
   if(!buffer)return Response.json({error:"Dokumen tidak ditemukan"},{status:404});

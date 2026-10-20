@@ -21,14 +21,18 @@ const initialPeriod = () => {
     start = new Date(end.getFullYear(), end.getMonth() - 1, 21);
   return { from: iso(start), to: iso(end) };
 };
-const clock = (v?: string | null) =>
-  v
-    ? new Date(v).toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Asia/Jakarta",
-      })
-    : "—";
+const clock = (v?: string | null) => {
+  if (!v) return "—";
+  const isoStr = v.includes("T") ? v : v.replace(" ", "T");
+  const withZone = isoStr.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(isoStr) ? isoStr : `${isoStr}Z`;
+  const parsed = new Date(withZone);
+  if (isNaN(parsed.getTime())) return v;
+  return parsed.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  });
+};
 const dateLabel = (v: string) =>
   new Date(`${v}T00:00:00`).toLocaleDateString("id-ID", {
     weekday: "short",

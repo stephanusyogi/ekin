@@ -30,9 +30,41 @@ export async function POST(request: Request) {
   const holidayRows = type === "Cuti" ? await getDb().select({ date: holidays.holidayDate }).from(holidays).where(and(gte(holidays.holidayDate, startDate), lte(holidays.holidayDate, endDate))) : [];
   const durationDays = type === "DL" ? calendarDays(startDate, endDate) : workingDays(startDate, endDate, new Set(holidayRows.map(h => h.date)));
   if (durationDays < 1) return Response.json({ error: "Rentang cuti tidak memiliki hari kerja" }, { status: 400 });
+  const [overlap] = await getDb().select().from(otherAttendances).where(and(
+    eq(otherAttendances.employeeEmail, employeeEmail),
+    lte(otherAttendances.startDate, endDate),
+    gte(otherAttendances.endDate, startDate),
+  )).limit(1);
+  if (overlap) return Response.json({ error: `Sudah ada pencatatan ${overlap.type} pada periode ${overlap.startDate} s.d. ${overlap.endDate}.` }, { status: 409 });
   const values = { employeeEmail, type, startDate, endDate, durationDays, documentNumber: p.documentNumber.trim(), documentDate: p.documentDate!, leaveType: p.leaveType?.trim() || "", destination: p.destination?.trim() || "", purpose: p.purpose?.trim() || "", notes: p.notes?.trim() || "", createdBy: identity.email };
   const [res] = await getDb().insert(otherAttendances).values(values);
   const [record] = await getDb().select().from(otherAttendances).where(eq(otherAttendances.id, res.insertId)).limit(1);
   await getDb().insert(attendanceAuditLogs).values({ employeeEmail, action: type === "DL" ? "create_dl" : "create_leave", workDate: startDate, detail: `${durationDays} hari sampai ${values.endDate}`, actorEmail: identity.email });
   return Response.json({ record }, { status: 201 });
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const identity = await requireEmployee(request);
+    const url = new URL(request.url);
+    const id = Number(url.searchParams.get("id"));
+    if (!id) return Response.json({ error: "ID tidak valid" }, { status: 400 });
+    const db = getDb();
+    const [record] = await db.select().from(otherAttendances).where(eq(otherAttendances.id, id)).limit(1);
+    if (!record) return Response.json({ error: "Data tidak ditemukan" }, { status: 404 });
+    const isOwner = record.employeeEmail.toLowerCase() === identity.email.toLowerCase();
+    const isAdmin = ["super_user", "super_admin", "admin"].includes(identity.role);
+    if (!isOwner && !isAdmin) return Response.json({ error: "Anda tidak berwenang menghapus data ini" }, { status: 403 });
+    await db.delete(otherAttendances).where(eq(otherAttendances.id, id));
+    await db.insert(attendanceAuditLogs).values({
+      employeeEmail: record.employeeEmail,
+      action: `delete_${record.type.toLowerCase()}`,
+      workDate: record.startDate,
+      detail: `Menghapus pencatatan ${record.type} ${record.startDate}–${record.endDate}`,
+      actorEmail: identity.email,
+    });
+    return Response.json({ success: true });
+  } catch {
+    return Response.json({ error: "Data belum dapat dihapus" }, { status: 403 });
+  }
 }

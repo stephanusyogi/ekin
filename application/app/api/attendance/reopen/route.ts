@@ -10,7 +10,7 @@ const isTopLeader=(position?:string|null)=>["ketua","sekretaris"].includes((posi
 export async function GET(request: Request) {
   const team=new URL(request.url).searchParams.get("scope")==="team";
   if(team){
-    const me=await requireAuthorizedUser(request),db=getDb(),staff=await db.select().from(employees),self=staff.find(e=>e.email?.toLowerCase()===me.email.toLowerCase()),direct=new Set(staff.filter(e=>e.directSupervisorId===self?.id&&e.email).map(e=>e.email!.toLowerCase())),rows=await db.select().from(attendanceReopenRequests).orderBy(desc(attendanceReopenRequests.id)).limit(100),topEmails=new Set(staff.filter(e=>isTopLeader(e.position)&&e.email).map(e=>e.email!.toLowerCase())),isSuper=["super_user","super_admin"].includes(me.role),visible=rows.filter(row=>direct.has(row.employeeEmail.toLowerCase())||(isSuper&&topEmails.has(row.employeeEmail.toLowerCase())));
+    const me=await requireAuthorizedUser(request),db=getDb(),staff=await db.select().from(employees),self=staff.find(e=>e.email?.toLowerCase()===me.email.toLowerCase()),direct=new Set(staff.filter(e=>e.directSupervisorId===self?.id&&e.email).map(e=>e.email!.toLowerCase())),rows=await db.select().from(attendanceReopenRequests).orderBy(desc(attendanceReopenRequests.id)).limit(100),isSuper=["super_user","super_admin"].includes(me.role),isSekretaris=self?.position?.trim().toLowerCase()==="sekretaris",visible=rows.filter(row=>isSuper||isSekretaris||direct.has(row.employeeEmail.toLowerCase()));
     return Response.json({requests:visible.slice(0,50)})
   }
   const me=await requireEmployee(request);
@@ -49,8 +49,13 @@ export async function PATCH(request: Request) {
     const db=getDb(),[requestRow]=await db.select().from(attendanceReopenRequests).where(eq(attendanceReopenRequests.id,p.id)).limit(1);
     if(!requestRow)return Response.json({error:"Permintaan tidak ditemukan"},{status:404});
     if(requestRow.status!=="Menunggu")return Response.json({error:"Permintaan ini sudah diputuskan"},{status:409});
-    const staff=await db.select().from(employees),employee=staff.find(e=>e.email?.toLowerCase()===requestRow.employeeEmail.toLowerCase()),approver=staff.find(e=>e.email?.toLowerCase()===me.email.toLowerCase()),allowed=isTopLeader(employee?.position)?["super_user","super_admin"].includes(me.role):Boolean(employee&&approver&&employee.directSupervisorId===approver.id);
-    if(!allowed)return Response.json({error:isTopLeader(employee?.position)?"Permintaan Ketua/Sekretaris hanya dapat diputuskan Super Admin":"Hanya atasan langsung yang dapat memutuskan"},{status:403});
+    const staff=await db.select().from(employees),employee=staff.find(e=>e.email?.toLowerCase()===requestRow.employeeEmail.toLowerCase()),approver=staff.find(e=>e.email?.toLowerCase()===me.email.toLowerCase());
+    const isSuper=["super_user","super_admin"].includes(me.role);
+    const isSekretaris=approver?.position?.trim().toLowerCase()==="sekretaris";
+    const isDirectSupervisor=Boolean(employee&&approver&&employee.directSupervisorId===approver.id);
+    const isTargetTopLeader=isTopLeader(employee?.position);
+    const allowed = isSuper || (!isTargetTopLeader && (isSekretaris || isDirectSupervisor));
+    if(!allowed)return Response.json({error:isTargetTopLeader?"Permintaan Ketua/Sekretaris hanya dapat diputuskan Super Admin":"Hanya atasan langsung, Sekretaris, atau Super Admin yang dapat memutuskan"},{status:403});
     const now=new Date(),openUntil=p.decision==="Disetujui"?new Date(now.getTime()+60*60*1000).toISOString().slice(0, 19).replace('T', ' '):null;
     await db.update(attendanceReopenRequests).set({status:p.decision,decidedBy:me.email,decidedAt:now.toISOString().slice(0, 19).replace('T', ' '),openUntil}).where(eq(attendanceReopenRequests.id,p.id));
     const [row]=await db.select().from(attendanceReopenRequests).where(eq(attendanceReopenRequests.id,p.id)).limit(1);

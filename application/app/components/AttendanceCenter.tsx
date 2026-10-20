@@ -44,6 +44,20 @@ type TeamRecap = {
   employees: TeamEmployee[];
   records: TeamAttendance[];
 };
+
+function formatAttendanceClock(raw?: string | null): string {
+  if (!raw) return "—";
+  const isoStr = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const withZone = isoStr.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(isoStr) ? isoStr : `${isoStr}Z`;
+  const parsed = new Date(withZone);
+  if (isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Jakarta",
+  });
+}
+
 export default function AttendanceCenter() {
   const [today, setToday] = useState<Today | null>(null);
   const [records, setRecords] = useState<Other[]>([]);
@@ -58,7 +72,12 @@ export default function AttendanceCenter() {
   const [saving, setSaving] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [workOutput, setWorkOutput] = useState("");
-  const todayDate = new Date().toISOString().slice(0, 10);
+  const todayDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
   const [dl, setDl] = useState({
     documentNumber: "",
     documentDate: todayDate,
@@ -87,7 +106,7 @@ export default function AttendanceCenter() {
   };
   const load = async () => {
     try {
-      const [a, o, r, t, p, m] = await Promise.all([
+      const results = await Promise.allSettled([
         fetch("/api/attendance"),
         fetch("/api/attendance/other"),
         fetch("/api/attendance/recap"),
@@ -95,12 +114,13 @@ export default function AttendanceCenter() {
         fetch("/api/attendance/reopen?scope=team"),
         fetch("/api/me"),
       ]);
-      if (a.ok) setToday(await a.json());
-      if (o.ok) setRecords((await o.json()).records);
-      if (r.ok) setRecap(await r.json());
-      if (t.ok) setTeamRecap(await t.json());
-      if (p.ok) setPending((await p.json()).requests);
-      if (m.ok) setRole((await m.json()).user.role);
+      const [a, o, r, t, p, m] = results;
+      if (a.status === "fulfilled" && a.value.ok) setToday(await a.value.json());
+      if (o.status === "fulfilled" && o.value.ok) setRecords((await o.value.json()).records || []);
+      if (r.status === "fulfilled" && r.value.ok) setRecap(await r.value.json());
+      if (t.status === "fulfilled" && t.value.ok) setTeamRecap(await t.value.json());
+      if (p.status === "fulfilled" && p.value.ok) setPending((await p.value.json()).requests || []);
+      if (m.status === "fulfilled" && m.value.ok) setRole((await m.value.json()).user?.role || "user");
     } catch {
       notify("Data absensi belum dapat dimuat");
     }
@@ -132,6 +152,21 @@ export default function AttendanceCenter() {
       else setLeave({ ...leave, documentNumber: "", notes: "" });
     } catch (e) {
       notify(e instanceof Error ? e.message : "Data belum tersimpan");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const deleteOther = async (id: number, type: string) => {
+    if (!confirm(`Hapus pencatatan ${type} ini?`)) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/attendance/other?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      notify(`${type} berhasil dihapus`);
+      await load();
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Data belum dapat dihapus");
     } finally {
       setSaving(false);
     }
@@ -291,29 +326,13 @@ export default function AttendanceCenter() {
             ) : today?.attendance ? (
               <>
                 <p>
-                  Masuk{" "}
-                  {new Date(today.attendance.checkIn).toLocaleTimeString(
-                    "id-ID",
-                    {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      timeZone: "Asia/Jakarta",
-                    },
-                  )}{" "}
-                  · Terlambat {today.attendance.lateMinutes} menit
+                  Masuk {formatAttendanceClock(today.attendance.checkIn)} · Terlambat {today.attendance.lateMinutes} menit
                 </p>
                 <p>
                   Pengganti {today.attendance.replacementMinutes} menit setelah
                   jam pulang · Pulang{" "}
                   {today.attendance.checkOut
-                    ? new Date(today.attendance.checkOut).toLocaleTimeString(
-                        "id-ID",
-                        {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          timeZone: "Asia/Jakarta",
-                        },
-                      )
+                    ? formatAttendanceClock(today.attendance.checkOut)
                     : "belum tercatat"}
                 </p>
               </>
@@ -529,7 +548,7 @@ export default function AttendanceCenter() {
               </button>
             </div>
           </article>
-          <History records={records.filter((r) => r.type === "DL")} />
+          <History records={records.filter((r) => r.type === "DL")} onDelete={deleteOther} />
         </div>
       )}
       {tab === "cuti" && (
@@ -625,7 +644,7 @@ export default function AttendanceCenter() {
               </button>
             </div>
           </article>
-          <History records={records.filter((r) => r.type === "Cuti")} />
+          <History records={records.filter((r) => r.type === "Cuti")} onDelete={deleteOther} />
         </div>
       )}
       {tab === "rekap" && (
@@ -693,22 +712,8 @@ export default function AttendanceCenter() {
                     recap.regularRecap.map((r: any) => (
                       <tr key={r.id}>
                         <td>{r.workDate}</td>
-                        <td>
-                          {new Date(r.checkIn).toLocaleTimeString("id-ID", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            timeZone: "Asia/Jakarta",
-                          })}
-                        </td>
-                        <td>
-                          {r.checkOut
-                            ? new Date(r.checkOut).toLocaleTimeString("id-ID", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                timeZone: "Asia/Jakarta",
-                              })
-                            : "—"}
-                        </td>
+                        <td>{formatAttendanceClock(r.checkIn)}</td>
+                        <td>{formatAttendanceClock(r.checkOut)}</td>
                         <td>{r.attendanceStatus}</td>
                         <td>{r.lateMinutes} mnt</td>
                         <td>{r.replacementMinutes} mnt</td>
@@ -779,22 +784,8 @@ export default function AttendanceCenter() {
                 <tr key={r.id}>
                   <td>{i + 1}</td>
                   <td>{r.workDate}</td>
-                  <td>
-                    {new Date(r.checkIn).toLocaleTimeString("id-ID", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      timeZone: "Asia/Jakarta",
-                    })}
-                  </td>
-                  <td>
-                    {r.checkOut
-                      ? new Date(r.checkOut).toLocaleTimeString("id-ID", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          timeZone: "Asia/Jakarta",
-                        })
-                      : "—"}
-                  </td>
+                  <td>{formatAttendanceClock(r.checkIn)}</td>
+                  <td>{formatAttendanceClock(r.checkOut)}</td>
                   <td>
                     {(
                       {
@@ -970,25 +961,8 @@ export default function AttendanceCenter() {
                         <tr key={r.id}>
                           <td>{employee?.fullName || r.employeeEmail}</td>
                           <td>{r.workDate}</td>
-                          <td>
-                            {new Date(r.checkIn).toLocaleTimeString("id-ID", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              timeZone: "Asia/Jakarta",
-                            })}
-                          </td>
-                          <td>
-                            {r.checkOut
-                              ? new Date(r.checkOut).toLocaleTimeString(
-                                  "id-ID",
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                    timeZone: "Asia/Jakarta",
-                                  },
-                                )
-                              : "Belum absen pulang"}
-                          </td>
+                          <td>{formatAttendanceClock(r.checkIn)}</td>
+                          <td>{formatAttendanceClock(r.checkOut)}</td>
                           <td>{r.attendanceStatus}</td>
                           <td>{r.lateMinutes} mnt</td>
                           <td>{r.replacementMinutes} mnt</td>
@@ -1095,7 +1069,7 @@ export default function AttendanceCenter() {
     </section>
   );
 }
-function History({ records }: { records: Other[] }) {
+function History({ records, onDelete }: { records: Other[]; onDelete?: (id: number, type: string) => void }) {
   return (
     <article className="module-card">
       <span>RIWAYAT</span>
@@ -1103,18 +1077,31 @@ function History({ records }: { records: Other[] }) {
       <div className="other-history">
         {records.length ? (
           records.map((r) => (
-            <div key={r.id}>
-              <b>
-                {r.type}
-                {r.leaveType ? ` · ${r.leaveType}` : ""} · {r.startDate}–
-                {r.endDate}
-              </b>
-              <span>
-                {r.durationDays} hari · Surat {r.documentNumber || "—"} (
-                {r.documentDate || "—"})
-                {r.destination ? ` · ${r.destination}` : ""}
-              </span>
-              <small>{r.purpose || r.notes || "Tanpa catatan"}</small>
+            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+              <div style={{ flex: 1 }}>
+                <b>
+                  {r.type}
+                  {r.leaveType ? ` · ${r.leaveType}` : ""} · {r.startDate}–
+                  {r.endDate}
+                </b>
+                <span>
+                  {r.durationDays} hari · Surat {r.documentNumber || "—"} (
+                  {r.documentDate || "—"})
+                  {r.destination ? ` · ${r.destination}` : ""}
+                </span>
+                <small>{r.purpose || r.notes || "Tanpa catatan"}</small>
+              </div>
+              {onDelete && (
+                <button
+                  type="button"
+                  className="danger"
+                  style={{ fontSize: "10px", padding: "3px 7px", border: "1px solid #fca5a5", borderRadius: "5px", background: "#fef2f2", color: "#b91c1c", cursor: "pointer", whiteSpace: "nowrap" }}
+                  onClick={() => onDelete(r.id, r.type)}
+                  title="Hapus pencatatan"
+                >
+                  ✕ Hapus
+                </button>
+              )}
             </div>
           ))
         ) : (
