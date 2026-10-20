@@ -368,7 +368,7 @@ export async function PATCH(request: Request) {
     const approver = managers.includes(me.role) || hasSakipOperator(me) || row.supervisorId === self?.id;
     if (
       p.action === "submit" &&
-      owner &&
+      canManagePk &&
       ["Draft", "Dikembalikan"].includes(row.status)
     ) {
       await db
