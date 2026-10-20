@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import TimeInput24 from "./TimeInput24";
 export default function AttendanceSettings() {
   const [form, setForm] = useState<any>({
     mondayThursdayStart: "07:30",
@@ -118,41 +119,37 @@ export default function AttendanceSettings() {
           <div className="rule-fields">
             <label>
               Senin–Kamis · Masuk
-              <input
-                type="time"
+              <TimeInput24
                 value={form.mondayThursdayStart}
-                onChange={(e) =>
-                  setForm({ ...form, mondayThursdayStart: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, mondayThursdayStart: val })
                 }
               />
             </label>
             <label>
               Senin–Kamis · Pulang
-              <input
-                type="time"
+              <TimeInput24
                 value={form.mondayThursdayEnd}
-                onChange={(e) =>
-                  setForm({ ...form, mondayThursdayEnd: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, mondayThursdayEnd: val })
                 }
               />
             </label>
             <label>
               Jumat · Masuk
-              <input
-                type="time"
+              <TimeInput24
                 value={form.fridayStart}
-                onChange={(e) =>
-                  setForm({ ...form, fridayStart: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, fridayStart: val })
                 }
               />
             </label>
             <label>
               Jumat · Pulang
-              <input
-                type="time"
+              <TimeInput24
                 value={form.fridayEnd}
-                onChange={(e) =>
-                  setForm({ ...form, fridayEnd: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, fridayEnd: val })
                 }
               />
             </label>
@@ -166,11 +163,10 @@ export default function AttendanceSettings() {
           <div className="rule-fields">
             <label>
               Batas masuk terakhir
-              <input
-                type="time"
+              <TimeInput24
                 value={form.morningCutoff}
-                onChange={(e) =>
-                  setForm({ ...form, morningCutoff: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, morningCutoff: val })
                 }
               />
             </label>
@@ -204,11 +200,11 @@ export default function AttendanceSettings() {
             </label>
             <label>
               Jam penutupan
-              <input
-                type="time"
+              <TimeInput24
+                disabled={!form.dailyCloseEnabled}
                 value={form.dailyCloseTime}
-                onChange={(e) =>
-                  setForm({ ...form, dailyCloseTime: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, dailyCloseTime: val })
                 }
               />
             </label>
@@ -249,23 +245,21 @@ export default function AttendanceSettings() {
             </div>
             <label>
               Mulai dibuka
-              <input
-                type="time"
+              <TimeInput24
                 disabled={!form.checkInWindowEnabled}
                 value={form.checkInOpenTime}
-                onChange={(e) =>
-                  setForm({ ...form, checkInOpenTime: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, checkInOpenTime: val })
                 }
               />
             </label>
             <label>
               Ditutup
-              <input
-                type="time"
+              <TimeInput24
                 disabled={!form.checkInWindowEnabled}
                 value={form.checkInCloseTime}
-                onChange={(e) =>
-                  setForm({ ...form, checkInCloseTime: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, checkInCloseTime: val })
                 }
               />
             </label>
@@ -301,37 +295,34 @@ export default function AttendanceSettings() {
             </div>
             <label>
               Senin–Kamis dibuka
-              <input
-                type="time"
+              <TimeInput24
                 disabled={!form.checkOutWindowEnabled}
                 value={form.mondayThursdayCheckOutOpen}
-                onChange={(e) =>
+                onChange={(val) =>
                   setForm({
                     ...form,
-                    mondayThursdayCheckOutOpen: e.target.value,
+                    mondayThursdayCheckOutOpen: val,
                   })
                 }
               />
             </label>
             <label>
               Jumat dibuka
-              <input
-                type="time"
+              <TimeInput24
                 disabled={!form.checkOutWindowEnabled}
                 value={form.fridayCheckOutOpen}
-                onChange={(e) =>
-                  setForm({ ...form, fridayCheckOutOpen: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, fridayCheckOutOpen: val })
                 }
               />
             </label>
             <label>
               Ditutup setiap hari
-              <input
-                type="time"
+              <TimeInput24
                 disabled={!form.checkOutWindowEnabled}
                 value={form.checkOutCloseTime}
-                onChange={(e) =>
-                  setForm({ ...form, checkOutCloseTime: e.target.value })
+                onChange={(val) =>
+                  setForm({ ...form, checkOutCloseTime: val })
                 }
               />
             </label>

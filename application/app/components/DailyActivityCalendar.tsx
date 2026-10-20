@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import TimeInput24 from "./TimeInput24";
 
 export type DailyActivity = {
   id: number;
@@ -385,7 +386,7 @@ export default function DailyActivityCalendar({
         {/* Sticky Days Header Row */}
         <div className="gcal-day-header-row">
           <div className="gcal-timezone-cell">
-            <span>GMT+07</span>
+            <span>WIB</span>
           </div>
 
           <div className="gcal-day-columns-header">
@@ -428,7 +429,7 @@ export default function DailyActivityCalendar({
             <div className="gcal-time-gutter">
               {hours.map((h) => (
                 <div key={h} className="gcal-time-label" style={{ height: HOUR_HEIGHT }}>
-                  <span>{`${String(h).padStart(2, "0")}:00`}</span>
+                  <span>{`${String(h).padStart(2, "0")}.00`}</span>
                 </div>
               ))}
             </div>
@@ -582,19 +583,17 @@ export default function DailyActivityCalendar({
 
               <label>
                 Jam Mulai
-                <input
-                  type="time"
+                <TimeInput24
                   value={form.startTime}
-                  onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                  onChange={(val) => setForm({ ...form, startTime: val })}
                 />
               </label>
 
               <label>
                 Jam Selesai
-                <input
-                  type="time"
+                <TimeInput24
                   value={form.endTime}
-                  onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                  onChange={(val) => setForm({ ...form, endTime: val })}
                 />
               </label>
 

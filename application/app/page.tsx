@@ -10,6 +10,7 @@ import MonthlyAttendanceReport from "./components/MonthlyAttendanceReport";
 import PerformanceAgreementCenter from "./components/PerformanceAgreementCenter";
 import SecurityCenter from "./components/SecurityCenter";
 import AgendaCenter, { AgendaToday } from "./components/AgendaCenter";
+import TimeInput24 from "./components/TimeInput24";
 
 type Task = {
   id: number;
@@ -1132,52 +1133,48 @@ export default function Home() {
                       <div className="rule-fields">
                         <label>
                           Senin–Kamis · Jam Masuk
-                          <input
-                            type="time"
+                          <TimeInput24
                             value={ruleForm.mondayThursdayStart}
-                            onChange={(e) =>
+                            onChange={(val) =>
                               setRuleForm({
                                 ...ruleForm,
-                                mondayThursdayStart: e.target.value,
+                                mondayThursdayStart: val,
                               })
                             }
                           />
                         </label>
                         <label>
                           Senin–Kamis · Jam Pulang
-                          <input
-                            type="time"
+                          <TimeInput24
                             value={ruleForm.mondayThursdayEnd}
-                            onChange={(e) =>
+                            onChange={(val) =>
                               setRuleForm({
                                 ...ruleForm,
-                                mondayThursdayEnd: e.target.value,
+                                mondayThursdayEnd: val,
                               })
                             }
                           />
                         </label>
                         <label>
                           Jumat · Jam Masuk
-                          <input
-                            type="time"
+                          <TimeInput24
                             value={ruleForm.fridayStart}
-                            onChange={(e) =>
+                            onChange={(val) =>
                               setRuleForm({
                                 ...ruleForm,
-                                fridayStart: e.target.value,
+                                fridayStart: val,
                               })
                             }
                           />
                         </label>
                         <label>
                           Jumat · Jam Pulang
-                          <input
-                            type="time"
+                          <TimeInput24
                             value={ruleForm.fridayEnd}
-                            onChange={(e) =>
+                            onChange={(val) =>
                               setRuleForm({
                                 ...ruleForm,
-                                fridayEnd: e.target.value,
+                                fridayEnd: val,
                               })
                             }
                           />
@@ -1192,13 +1189,12 @@ export default function Home() {
                       <div className="rule-fields">
                         <label>
                           Batas masuk terakhir
-                          <input
-                            type="time"
+                          <TimeInput24
                             value={ruleForm.morningCutoff}
-                            onChange={(e) =>
+                            onChange={(val) =>
                               setRuleForm({
                                 ...ruleForm,
-                                morningCutoff: e.target.value,
+                                morningCutoff: val,
                               })
                             }
                           />
@@ -1400,6 +1396,8 @@ export default function Home() {
                         {new Date().toLocaleTimeString("id-ID", {
                           hour: "2-digit",
                           minute: "2-digit",
+                          hour12: false,
+                          hourCycle: "h23",
                           timeZone: "Asia/Jakarta",
                         })}
                       </strong>

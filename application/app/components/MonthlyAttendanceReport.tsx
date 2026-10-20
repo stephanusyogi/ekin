@@ -30,6 +30,8 @@ const clock = (v?: string | null) => {
   return parsed.toLocaleTimeString("id-ID", {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
+    hourCycle: "h23",
     timeZone: "Asia/Jakarta",
   });
 };

@@ -707,3 +707,94 @@
   background: #f8fafc;
   border-color: #94a3b8;
 }
+
+/* 24-Hour Indonesian Time Input (Tanpa AM/PM) */
+.time-input-24 {
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 4px 8px;
+  gap: 6px;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+.time-input-24:focus-within {
+  border-color: #168765;
+  box-shadow: 0 0 0 3px rgba(22, 135, 101, 0.15);
+}
+.time-input-24.disabled {
+  background: #f1f5f9;
+  opacity: 0.65;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.time-select-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.time-input-24 select {
+  border: 1px solid transparent;
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  cursor: pointer;
+  padding: 4px 6px;
+  outline: none;
+  border-radius: 5px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  text-align: center;
+  min-width: 32px;
+  transition: background 0.15s ease;
+}
+.time-input-24 select:hover {
+  background: #e2e8f0;
+}
+.time-input-24 select:focus {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #6ee7b7;
+}
+.time-input-24 select option {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+}
+.time-separator {
+  font-size: 13px;
+  font-weight: 800;
+  color: #64748b;
+  user-select: none;
+  padding: 0 2px;
+}
+.time-wib-tag {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #168765;
+  background: #ecfdf5;
+  padding: 3px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  letter-spacing: 0.04em;
+  user-select: none;
+  white-space: nowrap;
+}
+.rule-fields .time-input-24,
+.module-form .time-input-24 {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 11px;
+  min-height: 40px;
+  border-color: #dbe3e8;
+  border-radius: 7px;
+}
+
