@@ -1262,28 +1262,36 @@ export default function PerformanceAgreementCenter() {
                                       const isChecked = assignedEmpIds.includes(String(col.id));
                                       return (
                                         <td key={col.id} className={`col-matrix-cell ${isChecked ? "checked" : ""}`}>
-                                          <button
-                                            type="button"
-                                            className={`matrix-checkbox-btn ${isChecked ? "active" : ""}`}
-                                            title={`${isChecked ? "Cabut" : "Tugaskan"} aksi ke ${col.fullName} (${col.sub})`}
-                                            onClick={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, col.id, isChecked)}
-                                          >
-                                            {isChecked ? "✓" : ""}
-                                          </button>
-                                          {isChecked && (
-                                            <button
-                                              type="button"
-                                              className="matrix-create-pk-mini"
-                                              title={`Buat PK untuk ${col.fullName}`}
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setEditing(null);
-                                                applyInheritanceToForm(col.id, r.documentKey, r.year, firstAct.rktId, firstAct.id);
-                                                setShowPk(true);
-                                              }}
-                                            >
-                                              ⚡
-                                            </button>
+                                          {plans.canManage ? (
+                                            <>
+                                              <button
+                                                type="button"
+                                                className={`matrix-checkbox-btn ${isChecked ? "active" : ""}`}
+                                                title={`${isChecked ? "Cabut" : "Tugaskan"} aksi ke ${col.fullName} (${col.sub})`}
+                                                onClick={() => toggleRakInheritance(Number(firstAct.rktId), firstAct, col.id, isChecked)}
+                                              >
+                                                {isChecked ? "✓" : ""}
+                                              </button>
+                                              {isChecked && (
+                                                <button
+                                                  type="button"
+                                                  className="matrix-create-pk-mini"
+                                                  title={`Buat PK untuk ${col.fullName}`}
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditing(null);
+                                                    applyInheritanceToForm(col.id, r.documentKey, r.year, firstAct.rktId, firstAct.id);
+                                                    setShowPk(true);
+                                                  }}
+                                                >
+                                                  ⚡
+                                                </button>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <span style={{ fontSize: "11px", color: isChecked ? "#166534" : "#cbd5e1", fontWeight: 700 }}>
+                                              {isChecked ? "✓" : "—"}
+                                            </span>
                                           )}
                                         </td>
                                       );
@@ -1788,11 +1796,15 @@ export default function PerformanceAgreementCenter() {
                     <p className="revision-note">Revisi: {a.revisionNotes}</p>
                   )}
                   <div className="row-actions">
-                    {a.status === "Draft" && <button onClick={() => act(a.id, "finalize")}>Tetapkan Final</button>}
-                    {a.status === "Draft" && <button onClick={() => {
-                      setForm({ ...a, employeeId: a.employeeId, objectives: a.objectives.map((objective:any) => ({ ...objective, indicators: objective.indicators.map((i:any) => ({ ...i, sourceRktId: i.sourceRktId || "", sourceMapping: typeof i.sourceMapping === "string" ? JSON.parse(i.sourceMapping || "{}") : i.sourceMapping })) })) });
-                      setEditing({ type: "edit-pk", id: a.id }); setShowPk(true);
-                    }}>Edit</button>}
+                    {data.canManageAll && a.status === "Draft" && (
+                      <button onClick={() => act(a.id, "finalize")}>Tetapkan Final</button>
+                    )}
+                    {data.canManageAll && a.status === "Draft" && (
+                      <button onClick={() => {
+                        setForm({ ...a, employeeId: a.employeeId, objectives: a.objectives.map((objective:any) => ({ ...objective, indicators: objective.indicators.map((i:any) => ({ ...i, sourceRktId: i.sourceRktId || "", sourceMapping: typeof i.sourceMapping === "string" ? JSON.parse(i.sourceMapping || "{}") : i.sourceMapping })) })) });
+                        setEditing({ type: "edit-pk", id: a.id }); setShowPk(true);
+                      }}>Edit</button>
+                    )}
                     <button
                       onClick={() => {
                         setPrintDocDate(`2 Januari ${a.year || year}`);
@@ -1801,11 +1813,13 @@ export default function PerformanceAgreementCenter() {
                     >
                       Cetak PK
                     </button>
-                    {a.status === "Disetujui" && <button onClick={() => {
-                      const notes = prompt("Alasan perubahan dokumen:", "Perubahan dokumen");
-                      if (notes) act(a.id, "revise", { notes });
-                    }}>Buat Perubahan</button>}
-                    {a.status === "Draft" && (
+                    {data.canManageAll && a.status === "Disetujui" && (
+                      <button onClick={() => {
+                        const notes = prompt("Alasan perubahan dokumen:", "Perubahan dokumen");
+                        if (notes) act(a.id, "revise", { notes });
+                      }}>Buat Perubahan</button>
+                    )}
+                    {data.canManageAll && a.status === "Draft" && (
                       <button
                         className="danger"
                         onClick={() =>

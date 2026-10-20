@@ -134,13 +134,16 @@ export async function POST(request: Request) {
     const me = await requireAuthorizedUser(request),
       db = getDb(),
       p = (await request.json()) as any,
-      staff = await db.select().from(employees),
-      self = me.isEmployee ? staff.find((e) => e.email === me.email) : null,
-      employeeId =
-        (managers.includes(me.role)||hasSakipOperator(me)) && p.employeeId
-          ? Number(p.employeeId)
-          : self?.id,
-      employee = staff.find((e) => e.id === employeeId);
+      staff = await db.select().from(employees);
+    if (!managers.includes(me.role) && !hasSakipOperator(me)) {
+      return Response.json(
+        { error: "Hanya Operator SAKIP atau Pengelola Sistem yang berwenang membuat Perjanjian Kinerja" },
+        { status: 403 },
+      );
+    }
+    const self = me.isEmployee ? staff.find((e) => e.email === me.email) : null;
+    const employeeId = p.employeeId ? Number(p.employeeId) : self?.id;
+    const employee = staff.find((e) => e.id === employeeId);
     if (!employee)
       return Response.json(
         { error: "Pegawai tidak ditemukan" },
@@ -284,8 +287,8 @@ export async function PATCH(request: Request) {
         { error: "Dokumen tidak ditemukan" },
         { status: 404 },
       );
-    const owner = managers.includes(me.role) || hasSakipOperator(me) || row.employeeId === self?.id;
-    if (p.action === "revise" && owner && row.status === "Disetujui") {
+    const canManagePk = managers.includes(me.role) || hasSakipOperator(me);
+    if (p.action === "revise" && canManagePk && row.status === "Disetujui") {
       const [cRes] = await db.insert(performanceAgreements).values({
         employeeId: row.employeeId, supervisorId: row.supervisorId, year: row.year,
         title: row.title, agreementLevel: row.agreementLevel, sourceType: row.sourceType,
@@ -318,7 +321,7 @@ export async function PATCH(request: Request) {
       const [updated] = await db.select().from(performanceBudgets).where(eq(performanceBudgets.id, budget.id)).limit(1);
       return Response.json({ budget: updated });
     }
-    if (p.action === "finalize" && owner && row.status === "Draft") {
+    if (p.action === "finalize" && canManagePk && row.status === "Draft") {
       if (row.agreementLevel === "Staf") {
         const allocations = await db.select().from(performanceBudgets).where(eq(performanceBudgets.agreementId, row.id));
         if (allocations.some((b) => b.confirmationStatus !== "Dikonfirmasi")) return Response.json({ error: "Seluruh alokasi anggaran staf harus dikonfirmasi atasan sebelum PK ditetapkan final" }, { status: 400 });
@@ -330,7 +333,7 @@ export async function PATCH(request: Request) {
       const [u] = await db.select().from(performanceAgreements).where(eq(performanceAgreements.id, row.id)).limit(1);
       return Response.json({ agreement: u });
     }
-    if (p.action === "update" && owner && row.status === "Draft") {
+    if (p.action === "update" && canManagePk && row.status === "Draft") {
       const items = flattenObjectives(p).filter((i: any) => i.objective?.trim() && i.indicator?.trim() && i.target?.trim());
       const budgetItems = Array.isArray(p.budgets) ? p.budgets.filter((b: any) => b.programName?.trim()) : [];
       if (!items.length || !budgetItems.length) return Response.json({ error: "Minimal satu sasaran dan satu baris anggaran wajib diisi" }, { status: 400 });
@@ -435,8 +438,8 @@ export async function DELETE(request: Request) {
         { error: "Dokumen tidak ditemukan" },
         { status: 404 },
       );
-    if (!managers.includes(me.role) && !hasSakipOperator(me) && row.employeeId !== self?.id)
-      return Response.json({ error: "Tidak berwenang" }, { status: 403 });
+    if (!managers.includes(me.role) && !hasSakipOperator(me))
+      return Response.json({ error: "Hanya Operator SAKIP atau Pengelola Sistem yang berwenang menghapus Perjanjian Kinerja" }, { status: 403 });
     if (row.status !== "Draft")
       return Response.json(
         { error: "Hanya Draft yang dapat dihapus" },
