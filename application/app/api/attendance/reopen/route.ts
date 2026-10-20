@@ -11,7 +11,17 @@ export async function GET(request: Request) {
   const team=new URL(request.url).searchParams.get("scope")==="team";
   if(team){
     const me=await requireAuthorizedUser(request),db=getDb(),staff=await db.select().from(employees),self=staff.find(e=>e.email?.toLowerCase()===me.email.toLowerCase()),direct=new Set(staff.filter(e=>e.directSupervisorId===self?.id&&e.email).map(e=>e.email!.toLowerCase())),rows=await db.select().from(attendanceReopenRequests).orderBy(desc(attendanceReopenRequests.id)).limit(100),isSuper=["super_user","super_admin"].includes(me.role),isSekretaris=self?.position?.trim().toLowerCase()==="sekretaris",visible=rows.filter(row=>isSuper||isSekretaris||direct.has(row.employeeEmail.toLowerCase()));
-    return Response.json({requests:visible.slice(0,50)})
+    const staffMap=new Map(staff.map(e=>[e.email?.toLowerCase()||"",e]));
+    const requestsWithStaff=visible.slice(0,50).map(row=>{
+      const emp=staffMap.get(row.employeeEmail.toLowerCase());
+      return {
+        ...row,
+        employeeName: emp?.fullName || row.employeeEmail,
+        employeePosition: emp?.position || "",
+        employeeUnit: emp?.unitSubsection || "",
+      };
+    });
+    return Response.json({requests:requestsWithStaff});
   }
   const me=await requireEmployee(request);
   const rows=await getDb().select().from(attendanceReopenRequests).where(eq(attendanceReopenRequests.employeeEmail,me.email)).orderBy(desc(attendanceReopenRequests.id)).limit(20);

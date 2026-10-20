@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { attendanceAuditLogs, holidays, otherAttendances } from "../../../../db/schema";
-import { requireEmployee } from "../../../lib/access";
+import { requireAuthorizedUser, requireEmployee } from "../../../lib/access";
 
 const validDate = (value?: string) => /^\d{4}-\d{2}-\d{2}$/.test(value || "");
 const calendarDays = (start: string, end: string) => Math.floor((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000) + 1;
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const identity = await requireEmployee(request);
+    const identity = await requireAuthorizedUser(request);
     const url = new URL(request.url);
     const id = Number(url.searchParams.get("id"));
     if (!id) return Response.json({ error: "ID tidak valid" }, { status: 400 });

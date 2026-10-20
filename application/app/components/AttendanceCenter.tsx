@@ -856,13 +856,13 @@ export default function AttendanceCenter() {
             timeZone: "Asia/Jakarta",
           })}
         </div>
-        <footer className={recap?.employee?.position?.trim().toLowerCase() === "sekretaris" ? "single" : ""}>
+        <footer className={["sekretaris", "ketua"].includes(recap?.employee?.position?.trim().toLowerCase() || "") ? "single" : ""}>
           <div>
             <p>Pegawai yang bersangkutan,</p>
             <strong>{recap?.employee?.fullName || "—"}</strong>
             <small>NIP/NIK {recap?.employee?.employeeNumber || "—"}</small>
           </div>
-          {recap?.employee?.position?.trim().toLowerCase() !== "sekretaris" && <div>
+          {!["sekretaris", "ketua"].includes(recap?.employee?.position?.trim().toLowerCase() || "") && <div>
             <p>Atasan langsung,</p>
             <strong>{recap?.supervisor?.fullName || "Belum ditentukan"}</strong>
             <small>
@@ -995,7 +995,7 @@ export default function AttendanceCenter() {
                   .filter((r) => r.status === "Menunggu")
                   .map((r) => (
                     <div key={r.id}>
-                      <b>{r.employeeEmail}</b>
+                      <b>{r.employeeName ? `${r.employeeName} (${r.employeePosition || r.employeeEmail})` : r.employeeEmail}</b>
                       <span>
                         {r.workDate} · {r.attendanceType||"Absensi"} · {r.reason}
                       </span>

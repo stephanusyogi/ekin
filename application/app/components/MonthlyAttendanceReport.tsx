@@ -404,13 +404,13 @@ export default function MonthlyAttendanceReport() {
                     timeZone: "Asia/Jakarta",
                   })}
                 </div>
-                <div className={`report-signatures ${employee.position?.trim().toLowerCase() === "sekretaris" ? "single" : ""}`}>
+                <div className={`report-signatures ${["sekretaris", "ketua"].includes(employee.position?.trim().toLowerCase() || "") ? "single" : ""}`}>
                   <div>
                     <p>Pegawai yang bersangkutan,</p>
                     <strong>{employee.fullName}</strong>
                     <small>NIP/NIK {employee.employeeNumber}</small>
                   </div>
-                  {employee.position?.trim().toLowerCase() !== "sekretaris" && <div>
+                  {!["sekretaris", "ketua"].includes(employee.position?.trim().toLowerCase() || "") && <div>
                     <p>Atasan langsung,</p>
                     <strong>
                       {supervisor?.fullName || "Belum ditentukan"}
