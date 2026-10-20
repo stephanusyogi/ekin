@@ -19,5 +19,5 @@ export async function GET(request:Request){
   const buffer=await getFile(row.statementFileKey);
   if(!buffer)return Response.json({error:"Dokumen tidak ditemukan"},{status:404});
   const safeName=(row.statementFileName||"surat-pernyataan").replace(/[\r\n"]/g,"_");
-  return new Response(buffer,{headers:{"content-type":row.statementFileType||"application/octet-stream","content-disposition":`inline; filename="${safeName}"`,"cache-control":"private, no-store"}});
+  return new Response(new Uint8Array(buffer),{headers:{"content-type":row.statementFileType||"application/octet-stream","content-disposition":`inline; filename="${safeName}"`,"cache-control":"private, no-store"}});
 }

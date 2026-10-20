@@ -16,7 +16,7 @@ export async function saveFile(fileKey: string, buffer: Buffer | ArrayBuffer) {
   if (!fs.existsSync(fileDir)) {
     fs.mkdirSync(fileDir, { recursive: true });
   }
-  const content = buffer instanceof Buffer ? buffer : Buffer.from(buffer);
+  const content = buffer instanceof Buffer ? buffer : Buffer.from(buffer as ArrayBuffer);
   await fs.promises.writeFile(filePath, content);
 }
 

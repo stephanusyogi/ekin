@@ -30,11 +30,11 @@ export const tasks = mysqlTable(
     approvalRequestedAt: varchar("approval_requested_at", { length: 255 }),
     approvalDecidedBy: varchar("approval_decided_by", { length: 255 }),
     approvalDecidedAt: varchar("approval_decided_at", { length: 255 }),
-    approvalNote: text("approval_note").notNull(),
+    approvalNote: text("approval_note").notNull().default(""),
     deadline: varchar("deadline", { length: 255 }).notNull().default(""),
     extendedDeadline: varchar("extended_deadline", { length: 255 }).notNull().default(""),
-    output: text("output").notNull(),
-    notes: text("notes").notNull(),
+    output: text("output").notNull().default(""),
+    notes: text("notes").notNull().default(""),
     verificationStatus: varchar("verification_status", { length: 255 })
       .notNull()
       .default("Belum Diverifikasi"),
@@ -186,7 +186,7 @@ export const attendances = mysqlTable(
     workDate: varchar("work_date", { length: 255 }).notNull(),
     checkIn: varchar("check_in", { length: 255 }).notNull(),
     checkOut: varchar("check_out", { length: 255 }),
-    workOutput: text("work_output").notNull(),
+    workOutput: text("work_output").notNull().default(""),
     location: varchar("location", { length: 255 }).notNull().default("Kantor Utama"),
     attendanceStatus: varchar("attendance_status", { length: 50 }).notNull().default("on_time"),
     lateMinutes: int("late_minutes").notNull().default(0),
@@ -235,7 +235,7 @@ export const attendanceSettings = mysqlTable("attendance_settings", {
     .default("16:00"),
   fridayCheckOutOpen: varchar("friday_check_out_open", { length: 5 }).notNull().default("16:30"),
   checkOutCloseTime: varchar("check_out_close_time", { length: 5 }).notNull().default("23:59"),
-  printHeader: text("print_header").notNull(),
+  printHeader: text("print_header").notNull().default(""),
   printPlace: varchar("print_place", { length: 255 }).notNull().default(""),
   updatedAt: varchar("updated_at", { length: 255 })
     .notNull()
@@ -444,7 +444,7 @@ export const performanceAgreements = mysqlTable("performance_agreements", {
   createdBy: varchar("created_by", { length: 255 }).notNull(),
   approvedBy: varchar("approved_by", { length: 255 }),
   approvedAt: varchar("approved_at", { length: 255 }),
-  revisionNotes: text("revision_notes").notNull(),
+  revisionNotes: text("revision_notes").notNull().default(""),
   version: int("version").notNull().default(1),
   createdAt: varchar("created_at", { length: 255 })
     .notNull()
@@ -467,17 +467,17 @@ export const performanceIndicators = mysqlTable("performance_indicators", {
   unit: varchar("unit", { length: 255 }).notNull().default("Dokumen"),
   targetDisplay: varchar("target_display", { length: 255 }).notNull().default(""),
   sourceRktId: bigint("source_rkt_id", { mode: "number" }),
-  sourceMapping: text("source_mapping").notNull(),
-  realization: text("realization").notNull(),
+  sourceMapping: text("source_mapping").notNull().default(""),
+  realization: text("realization").notNull().default(""),
   achievement: int("achievement").notNull().default(0),
   progress: int("progress").notNull().default(0),
-  evidence: text("evidence").notNull(),
+  evidence: text("evidence").notNull().default(""),
   validationStatus: varchar("validation_status", { length: 255 })
     .notNull()
     .default("Belum Diverifikasi"),
   validatedBy: varchar("validated_by", { length: 255 }),
   validatedAt: varchar("validated_at", { length: 255 }),
-  notes: text("notes").notNull(),
+  notes: text("notes").notNull().default(""),
   sortOrder: int("sort_order").notNull().default(0),
   createdAt: varchar("created_at", { length: 255 })
     .notNull()
@@ -581,8 +581,8 @@ export const actionPlans = mysqlTable("action_plans", {
   picEmployeeId: bigint("pic_employee_id", { mode: "number" }),
   deadline: varchar("deadline", { length: 255 }).notNull().default(""),
   progress: int("progress").notNull().default(0),
-  realization: text("realization").notNull(),
-  evidence: text("evidence").notNull(),
+  realization: text("realization").notNull().default(""),
+  evidence: text("evidence").notNull().default(""),
   validationStatus: varchar("validation_status", { length: 255 })
     .notNull()
     .default("Belum Diverifikasi"),

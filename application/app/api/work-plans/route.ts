@@ -151,7 +151,7 @@ export async function POST(request: Request) {
         await logSecurityEvent(request,{actorEmail:me.email,actorRole:me.role,action:"UPDATE",resourceType:"action_plan",resourceId:row.id,before,after:row});
         return Response.json({ action: row }, { status: 200 });
       }
-      const [res] = await db.insert(actionPlans).values({ rktId: Number(p.rktId), title: p.title.trim(), description: (p.description || "").trim(), responsibleUnit: (p.responsibleUnit || "").trim(), picEmployeeId: p.picEmployeeId ? Number(p.picEmployeeId) : null, deadline: p.deadline || "", createdBy: me.email });
+      const [res] = await db.insert(actionPlans).values({ rktId: Number(p.rktId), title: p.title.trim(), description: (p.description || "").trim(), responsibleUnit: (p.responsibleUnit || "").trim(), picEmployeeId: p.picEmployeeId ? Number(p.picEmployeeId) : null, deadline: p.deadline || "", realization: "", evidence: "", createdBy: me.email });
       const [row] = await db.select().from(actionPlans).where(eq(actionPlans.id, res.insertId)).limit(1);
       await logSecurityEvent(request,{actorEmail:me.email,actorRole:me.role,action:"CREATE",resourceType:"action_plan",resourceId:row.id,after:row});
       return Response.json({ action: row }, { status: 201 });

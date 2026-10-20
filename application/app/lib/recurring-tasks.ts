@@ -63,6 +63,8 @@ export async function generateRecurringTasks(now = new Date()) {
         sourcePerformanceIndicatorId: template.sourcePerformanceIndicatorId,
         createdBy: template.createdBy,
         approvalStatus: "Tidak Perlu Persetujuan",
+        approvalNote: "",
+        output: "",
         notes: template.notes || template.description,
         status: "Baru",
         progress: 0,

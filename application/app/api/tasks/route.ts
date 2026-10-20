@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   const outputType = (payload.outputType?.trim() || "Dokumen").slice(0, 50);
   const isSupervisorOrAdmin = ["super_user", "super_admin", "admin", "editor"].includes(user.role);
   const needsApproval = !isSupervisorOrAdmin;
-  const [res] = await getDb().insert(tasks).values({ ownerEmail:pics[0], createdBy:user.email, title, unit, picEmails:JSON.stringify(pics), priority:payload.priority||"Sedang", outputType, sourcePerformanceAgreementId:requestedAgreementId||null, sourcePerformanceIndicatorId:requestedIndicatorId||null, deadline:payload.deadline||"", due:payload.deadline||"Belum ditentukan", output:payload.output?.trim()||"", notes:payload.notes?.trim()||"", status:"Baru",approvalStatus:needsApproval?"Draft":"Tidak Perlu Persetujuan" });
+  const [res] = await getDb().insert(tasks).values({ ownerEmail:pics[0], createdBy:user.email, title, unit, picEmails:JSON.stringify(pics), priority:payload.priority||"Sedang", outputType, sourcePerformanceAgreementId:requestedAgreementId||null, sourcePerformanceIndicatorId:requestedIndicatorId||null, deadline:payload.deadline||"", due:payload.deadline||"Belum ditentukan", output:payload.output?.trim()||"", notes:payload.notes?.trim()||"", approvalNote: "", status:"Baru",approvalStatus:needsApproval?"Draft":"Tidak Perlu Persetujuan" });
   const [task] = await getDb().select().from(tasks).where(eq(tasks.id, res.insertId)).limit(1);
   return Response.json({ task }, { status: 201 });
 }
@@ -114,7 +114,7 @@ export async function PATCH(request: Request) {
     const approved=payload.action==="approve",approvalStatus=approved?"Disetujui":payload.action==="reject"?"Ditolak":"Perlu Perbaikan";
     await getDb().update(tasks).set({approvalStatus,approvalDecidedBy:user.email,approvalDecidedAt:new Date().toISOString().slice(0, 19).replace('T', ' '),approvalNote:note,status:approved?"Dikerjakan":payload.action==="reject"?"Ditolak":"Perbaikan"}).where(eq(tasks.id,payload.id));
     const [task]=await getDb().select().from(tasks).where(eq(tasks.id,payload.id)).limit(1);
-    await logSecurityEvent(request,{actorEmail:user.email,actorRole:user.role,action:`TASK_APPROVAL_${payload.action.toUpperCase()}`,resourceType:"task",resourceId:payload.id,reason:note,before,after:task});
+    await logSecurityEvent(request,{actorEmail:user.email,actorRole:user.role,action:`TASK_APPROVAL_${String(payload.action).toUpperCase()}`,resourceType:"task",resourceId:payload.id,reason:note,before,after:task});
     return Response.json({task});
   }
   if(["verify_complete","verify_revision"].includes(payload.action||"")){
