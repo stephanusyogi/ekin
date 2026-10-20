@@ -1,5 +1,5 @@
 import { asc, eq, inArray } from "drizzle-orm";
-import { getDb } from "../../../db";
+import { getDb, getPool } from "../../../db";
 import {
   actionPlans,
   annualWorkPlans,
@@ -13,6 +13,31 @@ import {
 } from "../../../db/schema";
 import { hasSakipOperator, requireAuthorizedUser } from "../../lib/access";
 const managers = ["super_user", "super_admin", "admin", "operator"];
+
+let integrityChecked = false;
+async function ensureAgreementsIntegrity() {
+  if (integrityChecked) return;
+  try {
+    const pool = getPool();
+    // Repair PKs where title contains Janie Triangga or Budi Rahayu but employee_id was misassigned (e.g. to Kasubag ID 81) due to previous creator fallback
+    await pool.query(`
+      UPDATE performance_agreements pa
+      JOIN employees e ON e.full_name LIKE '%Janie Triangga%'
+      SET pa.employee_id = e.id, pa.agreement_level = 'Anggota', pa.supervisor_id = e.direct_supervisor_id
+      WHERE pa.title LIKE '%Janie Triangga%' AND pa.employee_id != e.id
+    `);
+    await pool.query(`
+      UPDATE performance_agreements pa
+      JOIN employees e ON e.full_name LIKE '%Budi Rahayu%'
+      SET pa.employee_id = e.id, pa.agreement_level = 'Sekretaris', pa.supervisor_id = e.direct_supervisor_id
+      WHERE pa.title LIKE '%Budi Rahayu%' AND pa.employee_id != e.id
+    `);
+    integrityChecked = true;
+  } catch (err) {
+    console.warn("Agreements integrity check:", err);
+  }
+}
+
 const flattenObjectives = (payload: any) => {
   if (Array.isArray(payload.objectives))
     return payload.objectives.flatMap((objective: any, groupIndex: number) =>
@@ -30,6 +55,7 @@ const flattenObjectives = (payload: any) => {
 };
 export async function GET(request: Request) {
   try {
+    await ensureAgreementsIntegrity();
     const me = await requireAuthorizedUser(request),
       db = getDb(),
       staff = await db
