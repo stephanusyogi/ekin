@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { VerticalWorkOutput } from "./AttendanceCenter";
 type Report = {
   period: { from: string; to: string };
   printSettings: { header: string; place: string };
@@ -364,7 +365,7 @@ export default function MonthlyAttendanceReport() {
                         <th>Terlambat</th>
                         <th>Pengganti</th>
                         <th>Keterangan</th>
-                        <th>Output Pekerjaan</th>
+                        <th className="col-work-output">Output Pekerjaan</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -385,12 +386,16 @@ export default function MonthlyAttendanceReport() {
                               : "—"}
                           </td>
                           <td>{r.label}</td>
-                          <td>
-                            {r.other
-                              ? r.other.type === "DL"
-                                ? `${r.other.destination} · ${r.other.purpose}`
-                                : `${r.other.leaveType || "Cuti"} · ${r.other.documentNumber || "dokumen tercatat"}`
-                              : r.record?.workOutput || "—"}
+                          <td className="cell-work-output">
+                            {r.other ? (
+                              r.other.type === "DL" ? (
+                                `${r.other.destination} · ${r.other.purpose}`
+                              ) : (
+                                `${r.other.leaveType || "Cuti"} · ${r.other.documentNumber || "dokumen tercatat"}`
+                              )
+                            ) : (
+                              <VerticalWorkOutput text={r.record?.workOutput} />
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -61,6 +61,76 @@ function formatAttendanceClock(raw?: string | null): string {
   });
 }
 
+export interface ParsedWorkOutputItem {
+  num?: string;
+  time?: string;
+  title: string;
+  output?: string;
+  raw: string;
+}
+
+export function parseWorkOutputItems(text?: string | null): ParsedWorkOutputItem[] {
+  if (!text || !text.trim()) return [];
+
+  const rawParts = text
+    .split(/\r?\n|(?<=\S)\s+(?=\d+[\.\)])/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const pattern = /^(?:(\d+)[\.\)]\s*)?(?:\[([^\]]+)\]\s*)?(.*?)(?:\s*\((?:Output|output):\s*([^\)]+)\))?$/;
+
+  return rawParts.map((part, index) => {
+    const match = part.match(pattern);
+    if (match) {
+      const num = match[1] || (rawParts.length > 1 ? String(index + 1) : undefined);
+      const time = match[2]?.trim();
+      const title = match[3]?.trim() || part;
+      const output = match[4]?.trim();
+      return { num, time, title, output, raw: part };
+    }
+    return {
+      num: rawParts.length > 1 ? String(index + 1) : undefined,
+      title: part,
+      raw: part,
+    };
+  });
+}
+
+export function VerticalWorkOutput({
+  text,
+  className = "",
+}: {
+  text?: string | null;
+  className?: string;
+}) {
+  if (!text || !text.trim()) return <span className="empty-dash">—</span>;
+  const items = parseWorkOutputItems(text);
+  if (items.length === 0) return <span className="empty-dash">—</span>;
+
+  if (items.length === 1 && !items[0].time && !items[0].output && !items[0].num) {
+    return <span className={`table-work-output-single ${className}`}>{items[0].title}</span>;
+  }
+
+  return (
+    <div className={`table-work-output-stack ${className}`}>
+      {items.map((it, idx) => (
+        <div key={idx} className="table-work-output-item">
+          <div className="table-work-output-meta">
+            {it.num && <span className="table-output-num">{it.num}.</span>}
+            {it.time && <span className="table-output-time">[{it.time}]</span>}
+          </div>
+          <div className="table-output-content">
+            <span className="table-output-title">{it.title}</span>
+            {it.output && (
+              <span className="table-output-tag">Output: {it.output}</span>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function AttendanceCenter() {
   const [today, setToday] = useState<Today | null>(null);
   const [records, setRecords] = useState<Other[]>([]);
@@ -484,13 +554,46 @@ export default function AttendanceCenter() {
               </div>
             )}
           </article>
-          <article className="module-card full">
-            <span>OUTPUT PEKERJAAN</span>
-            <h3>
-              {today?.attendance?.workOutput ||
-                "Belum ada output pekerjaan hari ini"}
-            </h3>
-            <p>
+          <article className="module-card full work-output-card">
+            <div className="work-output-card-header">
+              <span>OUTPUT PEKERJAAN</span>
+              {today?.attendance?.checkOut && (
+                <span className="work-output-saved-badge">
+                  ✓ Tersimpan bersama jam pulang ({formatAttendanceClock(today.attendance.checkOut)})
+                </span>
+              )}
+            </div>
+            {today?.attendance?.workOutput ? (
+              <div className="work-output-vertical-list">
+                {parseWorkOutputItems(today.attendance.workOutput).map((item, idx) => (
+                  <div key={idx} className="work-output-vertical-item">
+                    <div className="work-output-item-header">
+                      {item.num && (
+                        <span className="work-output-badge-num">{item.num}</span>
+                      )}
+                      {item.time && (
+                        <span className="work-output-badge-time">
+                          🕒 {item.time}
+                        </span>
+                      )}
+                      {item.output && (
+                        <span className="work-output-badge-output">
+                          <strong>Output:</strong> {item.output}
+                        </span>
+                      )}
+                    </div>
+                    <div className="work-output-item-body">
+                      {item.title}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="work-output-empty">
+                <h3>Belum ada output pekerjaan hari ini</h3>
+              </div>
+            )}
+            <p className="work-output-card-hint">
               Output diisi saat Absen Pulang dan tersimpan bersama jam pulang.
             </p>
           </article>
@@ -737,7 +840,7 @@ export default function AttendanceCenter() {
                     <th>Status</th>
                     <th>Terlambat</th>
                     <th>Pengganti</th>
-                    <th>Catatan Absen Pulang</th>
+                    <th className="col-work-output">Catatan Absen Pulang</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -750,7 +853,9 @@ export default function AttendanceCenter() {
                         <td>{r.attendanceStatus}</td>
                         <td>{r.lateMinutes} mnt</td>
                         <td>{r.replacementMinutes} mnt</td>
-                        <td>{r.workOutput || "—"}</td>
+                        <td className="cell-work-output">
+                          <VerticalWorkOutput text={r.workOutput} />
+                        </td>
                       </tr>
                     ))
                   ) : (
@@ -808,7 +913,7 @@ export default function AttendanceCenter() {
               <th>Status</th>
               <th>Terlambat</th>
               <th>Pengganti</th>
-              <th>Catatan Absen Pulang</th>
+              <th className="col-work-output">Catatan Absen Pulang</th>
             </tr>
           </thead>
           <tbody>
@@ -834,7 +939,9 @@ export default function AttendanceCenter() {
                       ? `${r.replacementMinutes} menit`
                       : "—"}
                   </td>
-                  <td>{r.workOutput || "—"}</td>
+                  <td className="cell-work-output">
+                    <VerticalWorkOutput text={r.workOutput} />
+                  </td>
                 </tr>
               ))
             ) : (
@@ -981,7 +1088,7 @@ export default function AttendanceCenter() {
                     <th>Status</th>
                     <th>Terlambat</th>
                     <th>Pengganti</th>
-                    <th>Catatan Absen Pulang</th>
+                    <th className="col-work-output">Catatan Absen Pulang</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -999,7 +1106,9 @@ export default function AttendanceCenter() {
                           <td>{r.attendanceStatus}</td>
                           <td>{r.lateMinutes} mnt</td>
                           <td>{r.replacementMinutes} mnt</td>
-                          <td>{r.workOutput || "—"}</td>
+                          <td className="cell-work-output">
+                            <VerticalWorkOutput text={r.workOutput} />
+                          </td>
                         </tr>
                       );
                     })

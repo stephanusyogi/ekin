@@ -35,6 +35,50 @@
 @media print{.attendance-page>.page-title,.attendance-page>.attendance-tabs,.attendance-page>.attendance-module-grid,.attendance-page>.modal-backdrop,.attendance-page>.toast{display:none!important}.personal-print-sheet{display:block!important;color:#111}.personal-print-sheet header{display:flex;justify-content:space-between;border-bottom:2px solid #18364c;padding-bottom:10px}.personal-print-sheet header h1{font-size:16pt;margin:0}.personal-print-sheet header p{font-size:9pt}.personal-print-sheet header b{font:700 16pt Georgia;color:#148463}.personal-print-sheet dl{display:grid;grid-template-columns:1fr 1fr;gap:6px 25px;margin:14px 0}.personal-print-sheet dl div{display:grid;grid-template-columns:90px 1fr;font-size:8pt}.personal-print-sheet dt{color:#555}.personal-print-sheet dd{margin:0;font-weight:700}.personal-print-sheet table{width:100%;border-collapse:collapse;font-size:7pt}.personal-print-sheet th,.personal-print-sheet td{border:1px solid #bbb;padding:5px;vertical-align:top}.personal-print-sheet th{background:#edf4f1;text-align:left}.personal-other-print{margin-top:15px}.personal-other-print h3{font-size:10pt}.personal-other-print>p{font-size:8pt}.personal-print-sheet footer{display:grid;grid-template-columns:1fr 1fr;gap:80px;margin:28px 50px 0;text-align:center;break-inside:avoid}.personal-print-sheet footer p{font-size:8pt;margin-bottom:45px}.personal-print-sheet footer strong,.personal-print-sheet footer small{display:block;font-size:8pt}.personal-print-sheet footer strong{text-decoration:underline}.personal-print-sheet footer small{margin-top:3px}}
  .print-setting-preview{border:1px dashed #b9d7cb;background:#f5faf8;border-radius:8px;padding:12px}.print-setting-preview b,.print-setting-preview strong,.print-setting-preview span{display:block}.print-setting-preview b{font-size:8px;color:#168765}.print-setting-preview strong{font-size:10px;white-space:pre-line;margin:8px 0}.print-setting-preview span{font-size:9px;color:#697b72}.rule-fields label small{display:block;font-size:8px;color:#8794a1;margin-top:5px}.print-custom-header{white-space:pre-line;text-align:center;font-weight:700;line-height:1.45;margin:0 auto 14px;padding-bottom:12px;border-bottom:1px solid #9cabb4;max-width:100%;font-size:10pt}.print-dateline{text-align:center;font-size:9px;margin:22px 0 0}.report-signatures{margin-top:12px}
 @media print{.print-custom-header{font-size:10pt;margin-bottom:7mm;padding-bottom:4mm}.print-dateline{font-size:8pt;margin:7mm 0 0}.personal-print-sheet footer{margin-top:4mm}.report-signatures{margin-top:4mm}}
+
+/* Vertical Work Output Styling */
+.work-output-card{display:flex;flex-direction:column}
+.work-output-card-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.work-output-saved-badge{display:inline-flex;align-items:center;gap:4px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:999px;padding:3px 10px;font-size:10px;font-weight:600}
+.work-output-vertical-list{display:flex;flex-direction:column;gap:10px;margin:4px 0 14px}
+.work-output-vertical-item{display:flex;flex-direction:column;gap:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;transition:border-color .15s ease,box-shadow .15s ease}
+.work-output-vertical-item:hover{border-color:#cbd5e1;box-shadow:0 2px 6px rgba(0,0,0,.03)}
+.work-output-item-header{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.work-output-badge-num{width:22px;height:22px;border-radius:50%;background:#0f766e;color:#fff;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.work-output-badge-time{display:inline-flex;align-items:center;gap:4px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600}
+.work-output-badge-output{display:inline-flex;align-items:center;gap:4px;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:6px;padding:2px 8px;font-size:11px}
+.work-output-badge-output strong{font-weight:700;color:#166534}
+.work-output-item-body{font-size:12.5px;color:#1e293b;line-height:1.55;font-weight:500;padding-left:2px}
+.work-output-empty h3{font-size:14px;color:#64748b;margin:6px 0;font-weight:500}
+.work-output-card-hint{font-size:10px;color:#94a3b8;margin-top:4px}
+
+/* Vertical Catatan Absen Pulang in Tables */
+.recap-table th.col-work-output,
+.recap-table td.cell-work-output,
+.report-table-wrap th.col-work-output,
+.report-table-wrap td.cell-work-output,
+.personal-print-sheet th.col-work-output,
+.personal-print-sheet td.cell-work-output{
+  white-space:normal!important;
+  min-width:280px;
+  max-width:440px;
+  vertical-align:top;
+}
+.table-work-output-stack{display:flex;flex-direction:column;gap:7px;padding:2px 0}
+.table-work-output-item{display:flex;align-items:flex-start;gap:7px;background:#f8fafc;border:1px solid #eef2f6;border-radius:7px;padding:6px 9px;font-size:11px;line-height:1.45}
+.table-work-output-meta{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-top:1px}
+.table-output-num{font-weight:750;color:#0f766e;font-size:11px}
+.table-output-time{font-size:10px;font-weight:600;color:#0284c7;background:#e0f2fe;border-radius:4px;padding:1px 5px}
+.table-output-content{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.table-output-title{color:#1e293b;word-break:break-word;font-weight:500}
+.table-output-tag{align-self:flex-start;font-size:9.5px;font-weight:600;color:#15803d;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:4px;padding:1px 6px;margin-top:2px}
+.table-work-output-single{white-space:normal;word-break:break-word;color:#1e293b;line-height:1.45}
+@media print{
+  .table-work-output-stack{gap:3px!important}
+  .table-work-output-item{background:transparent!important;border:none!important;border-bottom:1px dashed #ddd!important;padding:2px 0!important;border-radius:0!important}
+  .table-output-time,.table-output-tag{background:transparent!important;border:none!important;color:#222!important;padding:0!important}
+}
+
 /* Perjanjian Kinerja */
 .pk-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:15px}.pk-summary article{background:#fff;border:1px solid var(--line);border-radius:11px;padding:15px}.pk-summary b,.pk-summary span{display:block}.pk-summary b{font-size:22px;color:#168765}.pk-summary span{font-size:8px;color:#81909e;margin-top:3px}.pk-list{display:grid;gap:12px}.pk-list>article{background:#fff;border:1px solid var(--line);border-radius:13px;padding:19px}.pk-card-head{display:flex;justify-content:space-between;gap:15px}.pk-card-head span{font-size:8px;color:#178765;font-weight:800;letter-spacing:1px}.pk-card-head h3{font-size:15px;margin:5px 0}.pk-card-head p{font-size:9px;color:#7b8997;margin:0}.pk-status{font-style:normal;height:max-content;border-radius:12px;padding:5px 9px;background:#edf3f1;color:#62776f;font-size:8px;font-weight:750}.pk-status.diajukan{background:#fff3df;color:#a66a14}.pk-status.disetujui{background:#e7f7f0;color:#087957}.pk-status.dikembalikan{background:#fff0ef;color:#b4554d}.pk-meta{display:flex;gap:22px;flex-wrap:wrap;margin:15px 0;padding:11px;background:#f6f8f9;border-radius:8px}.pk-meta span,.pk-meta b{font-size:8px}.pk-meta span{color:#7b8997}.pk-meta b{color:#293b4c;margin-left:4px}.pk-indicators{display:grid;gap:6px}.pk-indicators>div{border-left:3px solid #9dd8c2;padding:5px 10px}.pk-indicators b,.pk-indicators span{display:block;font-size:9px}.pk-indicators span{font-size:8px;color:#798896;margin-top:3px}.pk-notes{font-size:9px;color:#6e7d8c}.pk-modal{width:min(760px,100%);max-height:92vh;overflow:auto}.pk-form-grid{display:grid;grid-template-columns:1fr 2fr;gap:10px}.pk-form-indicators>div{display:flex;justify-content:space-between;align-items:center;margin:6px 0}.pk-form-indicators>div b{font-size:10px}.pk-form-indicators>div button,.remove-indicator{border:1px solid #d9e3e7;background:#fff;color:#168765;border-radius:6px;padding:6px 9px;font-size:8px}.pk-form-indicators section{display:grid;grid-template-columns:1.4fr 1.4fr .6fr .7fr auto;gap:7px;align-items:end;background:#f6f8f9;border-radius:8px;padding:9px;margin-bottom:7px}.remove-indicator{color:#b8564e}@media(max-width:750px){.pk-summary{grid-template-columns:1fr 1fr}.pk-form-grid,.pk-form-indicators section{grid-template-columns:1fr}.pk-card-head{align-items:flex-start}.pk-meta{gap:9px}}
 /* Final RKT-PK synchronization */
