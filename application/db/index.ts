@@ -36,3 +36,8 @@ export function getDb() {
 
   return drizzle(pool, { schema, mode: "default" });
 }
+
+export function getPool() {
+  if (!pool) getDb();
+  return pool!;
+}

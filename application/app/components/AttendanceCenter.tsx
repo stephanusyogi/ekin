@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import DailyActivityCalendar from "./DailyActivityCalendar";
 
 type Today = {
   attendance: any;
@@ -66,18 +67,44 @@ export default function AttendanceCenter() {
   const [pending, setPending] = useState<any[]>([]);
   const [role, setRole] = useState("user");
   const [tab, setTab] = useState<
-    "hari-ini" | "dl" | "cuti" | "rekap" | "tim" | "pembukaan"
+    "hari-ini" | "aktivitas" | "dl" | "cuti" | "rekap" | "tim" | "pembukaan"
   >("hari-ini");
   const [toast, setToast] = useState("");
   const [saving, setSaving] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [workOutput, setWorkOutput] = useState("");
+  const [todayActivities, setTodayActivities] = useState<any[]>([]);
   const todayDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Jakarta",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+
+  const openCheckout = async () => {
+    try {
+      const res = await fetch(`/api/attendance/activities?date=${todayDate}`);
+      const data = await res.json();
+      const acts = data.activities || [];
+      setTodayActivities(acts);
+      if (acts.length > 0) {
+        const summary = acts
+          .map(
+            (a: any, i: number) =>
+              `${i + 1}. [${a.startTime}–${a.endTime}] ${a.title}${
+                a.output ? ` (Output: ${a.output})` : ""
+              }`,
+          )
+          .join("\n");
+        setWorkOutput(summary);
+      } else if (!workOutput.trim() && today?.attendance?.workOutput) {
+        setWorkOutput(today.attendance.workOutput);
+      }
+    } catch {
+      // fallback
+    }
+    setShowCheckout(true);
+  };
   const [dl, setDl] = useState({
     documentNumber: "",
     documentDate: todayDate,
@@ -296,6 +323,7 @@ export default function AttendanceCenter() {
       <div className="attendance-tabs">
         {[
           ["hari-ini", "Hari Ini"],
+          ["aktivitas", "Aktivitas Harian"],
           ["dl", "Dinas Luar"],
           ["cuti", "Cuti"],
           ["rekap", "Rekap Saya"],
@@ -313,6 +341,9 @@ export default function AttendanceCenter() {
           </button>
         ))}
       </div>
+      {tab === "aktivitas" && (
+        <DailyActivityCalendar onActivityChanged={load} />
+      )}
       {tab === "hari-ini" && (
         <div className="attendance-module-grid">
           <article className="module-card status-large">
@@ -370,7 +401,7 @@ export default function AttendanceCenter() {
                     ? "attendance-button success"
                     : "attendance-button checkout"
                 }
-                onClick={() => setShowCheckout(true)}
+                onClick={() => openCheckout()}
                 disabled={
                   saving ||
                   !today?.attendance ||
@@ -1033,28 +1064,67 @@ export default function AttendanceCenter() {
           onMouseDown={() => setShowCheckout(false)}
         >
           <div
-            className="modal"
+            className="modal checkout-activity-modal"
             role="dialog"
             aria-modal="true"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <span>ABSEN PULANG</span>
-            <h3>Output Pekerjaan Hari Ini</h3>
-            <p>Ringkas hasil pekerjaan sebelum menyimpan jam pulang.</p>
+            <h3>Konfirmasi Jam Pulang</h3>
+            <p>
+              {todayActivities.length > 0
+                ? `Terdeteksi ${todayActivities.length} aktivitas yang telah Anda catat di Aktivitas Harian hari ini.`
+                : "Ringkas hasil pekerjaan sebelum menyimpan jam pulang."}
+            </p>
+
+            {todayActivities.length > 0 ? (
+              <div className="checkout-activity-list">
+                <b>Aktivitas Hari Ini (Otomatis Terangkum):</b>
+                <ul>
+                  {todayActivities.map((act: any) => (
+                    <li key={act.id}>
+                      <span className="badge-time">{act.startTime}–{act.endTime}</span>
+                      <strong>{act.title}</strong>
+                      {act.output && <em className="badge-out">{act.output}</em>}
+                    </li>
+                  ))}
+                </ul>
+                <small className="checkout-note-hint">
+                  Rangkuman di atas otomatis tersimpan ke catatan absensi kepulangan Anda.
+                </small>
+              </div>
+            ) : (
+              <div className="checkout-no-activity-notice">
+                <p>
+                  💡 <i>Anda belum mencatat aktivitas di menu <b>Aktivitas Harian</b> hari ini.</i>
+                </p>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => {
+                    setShowCheckout(false);
+                    setTab("aktivitas");
+                  }}
+                  style={{ marginBottom: 12 }}
+                >
+                  Buka Aktivitas Harian Dulu
+                </button>
+              </div>
+            )}
+
             <label>
-              Output pekerjaan
+              Output pekerjaan (opsional jika sudah terangkum di atas)
               <textarea
-                autoFocus
                 value={workOutput}
                 onChange={(e) => setWorkOutput(e.target.value)}
-                rows={5}
-                placeholder="Contoh: Menyelesaikan rekap kegiatan dan mengirim bahan verifikasi."
+                rows={todayActivities.length ? 3 : 5}
+                placeholder="Catatan tambahan hasil pekerjaan hari ini..."
               />
             </label>
             <div className="modal-actions">
               <button onClick={() => setShowCheckout(false)}>Batal</button>
               <button className="primary" onClick={checkOut} disabled={saving}>
-                {saving ? "Menyimpan..." : "Simpan & Absen Pulang"}
+                {saving ? "Menyimpan..." : "✓ Konfirmasi Absen Pulang"}
               </button>
             </div>
           </div>

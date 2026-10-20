@@ -209,6 +209,33 @@ export const attendances = mysqlTable(
   ],
 );
 
+export const dailyActivities = mysqlTable(
+  "daily_activities",
+  {
+    id: bigint("id", { mode: "number" }).primaryKey().autoincrement(),
+    employeeEmail: varchar("employee_email", { length: 255 }).notNull(),
+    activityDate: varchar("activity_date", { length: 10 }).notNull(),
+    startTime: varchar("start_time", { length: 5 }).notNull(),
+    endTime: varchar("end_time", { length: 5 }).notNull(),
+    title: varchar("title", { length: 500 }).notNull(),
+    description: text("description").notNull().default(""),
+    output: varchar("output", { length: 255 }).notNull().default(""),
+    category: varchar("category", { length: 100 }).notNull().default("Tugas Utama"),
+    location: varchar("location", { length: 255 }).notNull().default("Kantor Utama"),
+    color: varchar("color", { length: 50 }).notNull().default("#10b981"),
+    notes: text("notes").notNull().default(""),
+    createdAt: varchar("created_at", { length: 255 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: varchar("updated_at", { length: 255 })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("idx_daily_act_emp_date").on(table.employeeEmail, table.activityDate),
+  ],
+);
+
 export const attendanceSettings = mysqlTable("attendance_settings", {
   id: int("id").primaryKey().default(1),
   mondayThursdayStart: varchar("monday_thursday_start", { length: 5 }).notNull().default("07:30"),
