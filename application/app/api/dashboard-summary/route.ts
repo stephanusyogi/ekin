@@ -53,14 +53,31 @@ export async function GET(request: Request) {
       )
     : new Set<number>();
   const allPk = await db.select().from(performanceAgreements);
-  const visiblePk = canManageAllPk
-    ? allPk
-    : allPk.filter(
+  let visiblePk = allPk;
+  if (!canManageAllPk) {
+    if (employee?.position === "Anggota") {
+      const links = await db
+        .select()
+        .from(organizationCoordinations)
+        .where(eq(organizationCoordinations.commissionerEmployeeId, employee.id));
+      const coordinatedUnits = links.map((x) => x.unitSubsection);
+
+      visiblePk = allPk.filter((p) => {
+        if (p.employeeId === employee.id) return true;
+        if (p.coordinationCommissionerId === employee.id) return true;
+        if (p.agreementLevel === "Ketua") return true;
+        const owner = allEmployees.find((e) => e.id === p.employeeId);
+        return Boolean(owner && coordinatedUnits.includes(owner.unitSubsection));
+      });
+    } else {
+      visiblePk = allPk.filter(
         (p) =>
           p.employeeId === employee?.id ||
           p.supervisorId === employee?.id ||
           subordinateIds.has(p.employeeId),
       );
+    }
+  }
   const pkIds = visiblePk.map((p) => p.id);
   const pkIndicators = pkIds.length
       ? await db

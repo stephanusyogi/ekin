@@ -106,6 +106,14 @@ export async function GET(request: Request) {
             .filter((id): id is number => Boolean(id)),
         );
 
+        const unitKasubag = self.unitSubsection
+          ? staff.find(
+              (e) =>
+                e.unitSubsection === self.unitSubsection &&
+                e.position?.toLowerCase().includes("kasubag"),
+            )
+          : null;
+
         visible = all.filter((a) => {
           // 1. Dokumen PK milik sendiri
           if (a.employeeId === self.id) return true;
@@ -113,6 +121,7 @@ export async function GET(request: Request) {
           if (subordinateIds.has(a.employeeId)) return true;
           // 3. Dokumen PK atasan langsung atau parent agreement (sebagai rujukan cascading)
           if (self.directSupervisorId && a.employeeId === self.directSupervisorId) return true;
+          if (unitKasubag && a.employeeId === unitKasubag.id) return true;
           if (parentAgreementIds.has(a.id)) return true;
           return false;
         });
