@@ -22,16 +22,68 @@ async function ensureActivitiesTable() {
         location varchar(255) NOT NULL DEFAULT 'Kantor Utama',
         color varchar(50) NOT NULL DEFAULT '#10b981',
         notes text NOT NULL,
+        evidence_links text NOT NULL DEFAULT '',
         created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         INDEX idx_daily_act_emp_date (employee_email, activity_date)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+    try {
+      await pool.query(`ALTER TABLE daily_activities ADD COLUMN evidence_links text NOT NULL DEFAULT ''`);
+    } catch {
+      // Column already exists
+    }
     tableInitialized = true;
   } catch (err) {
     console.warn("daily_activities table check:", err);
   }
+}
+
+function parseAndCleanLinks(val: unknown): string[] {
+  if (!val) return [];
+  let rawList: any[] = [];
+  if (Array.isArray(val)) {
+    rawList = val;
+  } else if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val);
+      rawList = Array.isArray(parsed) ? parsed : [val];
+    } catch {
+      rawList = val.split(/\r?\n|,/);
+    }
+  }
+  return rawList
+    .map((s) => String(s || "").trim())
+    .filter(Boolean)
+    .map((raw) => {
+      let candidate = raw;
+      if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(candidate)) {
+        candidate = "https://" + candidate;
+      }
+      return candidate;
+    })
+    .slice(0, 20);
+}
+
+function formatActivityOutput(r: any) {
+  if (!r) return r;
+  let parsedLinks = parseAndCleanLinks(r.evidenceLinks);
+  let notes = r.notes || "";
+  // Backward compatibility: if evidenceLinks is empty, but notes has URL(s)
+  if (parsedLinks.length === 0 && notes) {
+    const urlMatches = notes.match(/https?:\/\/[^\s]+/g);
+    if (urlMatches && urlMatches.length > 0) {
+      parsedLinks = urlMatches.map((u) => u.trim());
+      const cleanedNotes = notes.replace(/https?:\/\/[^\s]+/g, "").trim();
+      notes = cleanedNotes;
+    }
+  }
+  return {
+    ...r,
+    notes,
+    evidenceLinks: parsedLinks,
+  };
 }
 
 async function syncToAttendance(db: ReturnType<typeof getDb>, email: string, date: string) {
@@ -124,7 +176,7 @@ export async function GET(request: Request) {
       rows = [];
     }
 
-    return Response.json({ activities: rows, from, to });
+    return Response.json({ activities: rows.map(formatActivityOutput), from, to });
   } catch (err: any) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Gagal memuat aktivitas" },
@@ -149,6 +201,7 @@ export async function POST(request: Request) {
     const location = String(p.location || "Kantor Utama").trim();
     const color = String(p.color || "#10b981").trim();
     const notes = String(p.notes || "").trim();
+    const evidenceLinks = JSON.stringify(parseAndCleanLinks(p.evidenceLinks));
 
     if (!title) {
       return Response.json({ error: "Judul aktivitas wajib diisi" }, { status: 400 });
@@ -170,6 +223,7 @@ export async function POST(request: Request) {
       location,
       color,
       notes,
+      evidenceLinks,
     });
 
     const [activity] = await db
@@ -181,7 +235,7 @@ export async function POST(request: Request) {
     // Sync to attendances summary if attendance exists
     await syncToAttendance(db, user.email, activityDate);
 
-    return Response.json({ activity }, { status: 201 });
+    return Response.json({ activity: formatActivityOutput(activity) }, { status: 201 });
   } catch (err: any) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Gagal menyimpan aktivitas" },
@@ -222,6 +276,10 @@ export async function PATCH(request: Request) {
     const location = String(p.location ?? before.location).trim();
     const color = String(p.color ?? before.color).trim();
     const notes = String(p.notes ?? before.notes).trim();
+    const evidenceLinks =
+      p.evidenceLinks !== undefined
+        ? JSON.stringify(parseAndCleanLinks(p.evidenceLinks))
+        : before.evidenceLinks;
 
     if (!title) {
       return Response.json({ error: "Judul aktivitas tidak boleh kosong" }, { status: 400 });
@@ -240,6 +298,7 @@ export async function PATCH(request: Request) {
         location,
         color,
         notes,
+        evidenceLinks,
         updatedAt: new Date().toISOString().slice(0, 19).replace("T", " "),
       })
       .where(eq(dailyActivities.id, id));
@@ -252,7 +311,7 @@ export async function PATCH(request: Request) {
 
     await syncToAttendance(db, before.employeeEmail, activityDate);
 
-    return Response.json({ activity });
+    return Response.json({ activity: formatActivityOutput(activity) });
   } catch (err: any) {
     return Response.json(
       { error: err instanceof Error ? err.message : "Gagal memperbarui aktivitas" },

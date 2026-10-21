@@ -224,6 +224,7 @@ export const dailyActivities = mysqlTable(
     location: varchar("location", { length: 255 }).notNull().default("Kantor Utama"),
     color: varchar("color", { length: 50 }).notNull().default("#10b981"),
     notes: text("notes").notNull().default(""),
+    evidenceLinks: text("evidence_links").notNull().default(""),
     createdAt: varchar("created_at", { length: 255 })
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),

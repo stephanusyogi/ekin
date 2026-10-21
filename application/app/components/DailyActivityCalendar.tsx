@@ -15,6 +15,7 @@ export type DailyActivity = {
   location: string;
   color: string;
   notes: string;
+  evidenceLinks?: string[];
 };
 
 const START_HOUR = 6; // 06:00
@@ -88,7 +89,19 @@ export default function DailyActivityCalendar({
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingActivity, setEditingActivity] = useState<DailyActivity | null>(null);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    activityDate: string;
+    startTime: string;
+    endTime: string;
+    title: string;
+    description: string;
+    output: string;
+    category: string;
+    location: string;
+    color: string;
+    notes: string;
+    evidenceLinks: string[];
+  }>({
     activityDate: fmtDate(getJakartaDate()),
     startTime: "08:00",
     endTime: "09:00",
@@ -99,6 +112,7 @@ export default function DailyActivityCalendar({
     location: "Kantor Utama",
     color: "#10b981",
     notes: "",
+    evidenceLinks: [""],
   });
   const [saving, setSaving] = useState(false);
 
@@ -200,6 +214,7 @@ export default function DailyActivityCalendar({
       location: "Kantor Utama",
       color: "#10b981",
       notes: "",
+      evidenceLinks: [""],
     });
     setShowModal(true);
   };
@@ -218,7 +233,11 @@ export default function DailyActivityCalendar({
       category: act.category,
       location: act.location,
       color: act.color || "#10b981",
-      notes: act.notes,
+      notes: act.notes || "",
+      evidenceLinks:
+        act.evidenceLinks && act.evidenceLinks.length > 0
+          ? act.evidenceLinks
+          : [""],
     });
     setShowModal(true);
   };
@@ -241,10 +260,18 @@ export default function DailyActivityCalendar({
     setSaving(true);
     try {
       const isEdit = Boolean(editingActivity?.id);
+      const cleanedLinks = form.evidenceLinks
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const payload = {
+        ...form,
+        evidenceLinks: cleanedLinks,
+        ...(isEdit ? { id: editingActivity!.id } : {}),
+      };
       const res = await fetch("/api/attendance/activities", {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isEdit ? { ...form, id: editingActivity!.id } : form),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -528,6 +555,25 @@ export default function DailyActivityCalendar({
                                 )}
                               </div>
                             )}
+                            {act.evidenceLinks && act.evidenceLinks.length > 0 && (
+                              <div
+                                className="gcal-event-links"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {act.evidenceLinks.map((link, idx) => (
+                                  <a
+                                    key={idx}
+                                    href={link}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="gcal-link-pill"
+                                    title={link}
+                                  >
+                                    🔗 Bukti {act.evidenceLinks!.length > 1 ? idx + 1 : ""}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -635,13 +681,75 @@ export default function DailyActivityCalendar({
               </label>
 
               <label className="wide">
-                Catatan Tambahan / Link Bukti Dukung (Opsional)
-                <input
+                Catatan Tambahan (Opsional)
+                <textarea
+                  rows={2}
                   value={form.notes}
-                  placeholder="Contoh: https://drive.google.com/... atau catatan kendala"
+                  placeholder="Catatan kendala, tindak lanjut, atau keterangan khusus..."
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 />
               </label>
+
+              <div className="wide gcal-evidence-section">
+                <div className="gcal-evidence-header">
+                  <div className="gcal-evidence-label">
+                    <span>Link Bukti Dukung (Opsional)</span>
+                    <small>Lampirkan Google Drive, spreadsheet, dokumen, atau tautan bukti kegiatan</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="gcal-add-link-btn"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        evidenceLinks: [...form.evidenceLinks, ""],
+                      })
+                    }
+                  >
+                    + Tambah Link Bukti
+                  </button>
+                </div>
+
+                <div className="gcal-evidence-list">
+                  {form.evidenceLinks.map((link, idx) => (
+                    <div key={idx} className="gcal-evidence-row">
+                      <span className="gcal-evidence-icon">🔗</span>
+                      <input
+                        type="url"
+                        value={link}
+                        placeholder={
+                          idx === 0
+                            ? "Contoh: https://docs.google.com/spreadsheets/d/... atau https://drive.google.com/..."
+                            : `Link Bukti Dukung ke-${idx + 1}...`
+                        }
+                        onChange={(e) => {
+                          const next = [...form.evidenceLinks];
+                          next[idx] = e.target.value;
+                          setForm({ ...form, evidenceLinks: next });
+                        }}
+                      />
+                      {form.evidenceLinks.length > 1 && (
+                        <button
+                          type="button"
+                          className="gcal-remove-link-btn"
+                          title="Hapus tautan ini"
+                          onClick={() => {
+                            const next = form.evidenceLinks.filter(
+                              (_, i) => i !== idx,
+                            );
+                            setForm({
+                              ...form,
+                              evidenceLinks: next.length ? next : [""],
+                            });
+                          }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="wide gcal-color-picker">
                 <span>Warna Label Blok</span>

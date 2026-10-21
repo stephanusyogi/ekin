@@ -1197,6 +1197,21 @@ export default function AttendanceCenter() {
                       <span className="badge-time">{act.startTime}–{act.endTime}</span>
                       <strong>{act.title}</strong>
                       {act.output && <em className="badge-out">{act.output}</em>}
+                      {act.evidenceLinks && act.evidenceLinks.length > 0 && (
+                        <span
+                          className="badge-links"
+                          style={{
+                            fontSize: "10px",
+                            background: "#e0f2fe",
+                            color: "#0369a1",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          🔗 {act.evidenceLinks.length} Bukti
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>

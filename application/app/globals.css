@@ -662,6 +662,129 @@
   border-top: 1px solid #f1f5f9;
 }
 
+/* Evidence links & notes in Daily Activity Modal */
+.gcal-evidence-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 12px;
+}
+.gcal-evidence-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.gcal-evidence-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gcal-evidence-label span {
+  font-size: 9.5px;
+  font-weight: 750;
+  color: #334155;
+}
+.gcal-evidence-label small {
+  font-size: 8px;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.35;
+}
+.gcal-add-link-btn {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 5px 9px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.gcal-add-link-btn:hover {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+  color: #065f46;
+}
+.gcal-evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.gcal-evidence-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gcal-evidence-icon {
+  font-size: 13px;
+  color: #0f766e;
+  flex-shrink: 0;
+}
+.gcal-evidence-row input {
+  flex: 1;
+  margin-top: 0 !important;
+  font-size: 10.5px;
+  padding: 8px 10px;
+  background: #ffffff;
+}
+.gcal-remove-link-btn {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.gcal-remove-link-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+/* Event block link pill */
+.gcal-event-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.gcal-link-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  text-decoration: none;
+  opacity: 0.9;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+.gcal-link-pill:hover {
+  opacity: 1;
+  background: #ffffff;
+  text-decoration: underline;
+}
+
 /* Checkout Activity Summary Modal */
 .checkout-activity-modal {
   max-width: 560px;
