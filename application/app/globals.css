@@ -965,6 +965,25 @@
   border-radius: 7px;
 }
 
+.row-actions button.primary {
+  background: #168765;
+  color: #ffffff;
+  border-color: #168765;
+  font-weight: 600;
+}
+.row-actions button.primary:hover {
+  background: #137456;
+}
+.row-actions button.accent {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+  font-weight: 600;
+}
+.row-actions button.accent:hover {
+  background: #0369a1;
+}
+
 /* ==========================================================================
    To-Do Review & Atasan Adjustments Modal Styles
    ========================================================================== */

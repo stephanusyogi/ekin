@@ -9,10 +9,10 @@ export function isLeadershipOrSupervisor(position?: string | null): boolean {
   if (!position) return false;
   const p = position.trim().toLowerCase();
   return (
-    p === "ketua" ||
-    p === "anggota" ||
+    p.includes("ketua") ||
+    p.includes("anggota") ||
     p.includes("komisioner") ||
-    p === "sekretaris" ||
+    p.includes("sekretaris") ||
     p.includes("kasubag") ||
     p.includes("kasubbag") ||
     p.includes("kepala sub") ||
@@ -28,7 +28,14 @@ export async function allowedTaskAssignees(user: User) {
   // Staf pelaksana operasional saja — Komisioner, Sekretaris, dan Kasubag tidak dimasukkan sebagai PIC To-Do
   const operationalStaff = active.filter(employee => !isLeadershipOrSupervisor(employee.position));
 
+  const userEmployee = user.isEmployee ? user.employee : null;
+  const isUserSupervisor = isLeadershipOrSupervisor(userEmployee?.position);
+
   if (user.role === "super_user" || user.role === "super_admin" || hasSakipOperator(user)) {
+    if (user.email) {
+      const emailLower = user.email.toLowerCase();
+      return operationalStaff.filter(e => e.email.toLowerCase() !== emailLower);
+    }
     return operationalStaff;
   }
   if (!user.isEmployee) return [];
@@ -41,10 +48,16 @@ export async function allowedTaskAssignees(user: User) {
     return operationalStaff.filter(employee => coordinatedUnits.includes(employee.unitSubsection));
   }
 
+  // Jika user adalah Sekretaris, dapat menugaskan seluruh staf pelaksana sekretariat, dan nama Sekretaris tidak muncul di PIC
+  const isSekretaris = user.employee?.position?.toLowerCase().includes("sekretaris");
+  if (isSekretaris) {
+    return operationalStaff.filter(employee => employee.id !== user.employee.id);
+  }
+
   const allowedIds = new Set<number>();
 
-  // Jika user pembuat adalah staf pelaksana, sertakan diri sendiri
-  if (!isLeadershipOrSupervisor(user.employee.position)) {
+  // Jika user pembuat adalah staf pelaksana biasa, sertakan diri sendiri
+  if (!isUserSupervisor) {
     allowedIds.add(user.employee.id);
   }
 
@@ -76,5 +89,6 @@ export async function allowedTaskAssignees(user: User) {
     }
   }
 
-  return operationalStaff.filter(employee => allowedIds.has(employee.id));
+  // Double safety: jika user pembuat adalah Kasubag atau Sekretaris, keluarkan diri sendiri dari opsi PIC
+  return operationalStaff.filter(employee => allowedIds.has(employee.id) && employee.id !== user.employee.id);
 }
