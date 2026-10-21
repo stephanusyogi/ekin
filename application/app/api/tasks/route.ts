@@ -76,7 +76,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const user=await requireAuthorizedUser(request);
   if(user.role==="viewer"&&!hasSakipOperator(user))return Response.json({error:"Viewer tidak dapat memperbarui To-Do"},{status:403});
-  const payload = await request.json() as { id?: number; action?:"edit_unstarted"|"supervisor_edit"|"request_approval"|"approve"|"reject"|"needs_revision"|"verify_complete"|"verify_revision"; title?:string; unit?:string; picEmails?:string[]; priority?:string; outputType?:string; sourcePerformanceAgreementId?:number|null; sourcePerformanceIndicatorId?:number|null; deadline?:string; output?:string; progress?: number; outputRealization?:string; completedActivities?:string; obstacles?:string; notes?:string; decisionNote?:string };
+  const payload = await request.json() as { id?: number; action?:"edit_unstarted"|"supervisor_edit"|"request_approval"|"approve"|"reject"|"needs_revision"|"verify_complete"|"verify_revision"|"request_extension"|"approve_extension"; title?:string; unit?:string; picEmails?:string[]; priority?:string; outputType?:string; sourcePerformanceAgreementId?:number|null; sourcePerformanceIndicatorId?:number|null; deadline?:string; requestedDeadline?:string; extendedDeadline?:string; reason?:string; output?:string; progress?: number; outputRealization?:string; completedActivities?:string; obstacles?:string; notes?:string; decisionNote?:string };
   if (!payload.id) return Response.json({ error: "Data tidak lengkap" }, { status: 400 });
   const [before]=await getDb().select().from(tasks).where(eq(tasks.id,payload.id)).limit(1);
   if(!before)return Response.json({error:"To-Do tidak ditemukan"},{status:404});
@@ -189,6 +189,79 @@ export async function PATCH(request: Request) {
     const [task]=await getDb().select().from(tasks).where(eq(tasks.id,payload.id)).limit(1);
     await logSecurityEvent(request,{actorEmail:user.email,actorRole:user.role,action:completed?"VERIFY_TASK_COMPLETE":"VERIFY_TASK_REVISION",resourceType:"task",resourceId:payload.id,reason:note,before,after:task});
     return Response.json({task});
+  }
+  if(payload.action==="request_extension"){
+    const pics = picsOf(before).map((e: string) => e.toLowerCase());
+    const isPic = pics.includes(user.email.toLowerCase());
+    const isCreator = before.createdBy.toLowerCase() === user.email.toLowerCase();
+    const canAdmin = ["super_user", "super_admin"].includes(user.role);
+    if (!isPic && !isCreator && !canAdmin) {
+      return Response.json({ error: "Hanya PIC penanggung jawab atau pembuat tugas yang dapat mengajukan perpanjangan deadline" }, { status: 403 });
+    }
+    const requestedDeadline = payload.requestedDeadline?.trim();
+    if (!requestedDeadline) {
+      return Response.json({ error: "Tanggal perpanjangan deadline wajib diisi" }, { status: 400 });
+    }
+    const reason = payload.reason?.trim() || "";
+    if (!reason) {
+      return Response.json({ error: "Alasan permohonan perpanjangan waktu wajib diisi" }, { status: 400 });
+    }
+    const currentNotes = before.notes || "";
+    const extensionTag = `[Permohonan Perpanjangan Deadline s.d ${requestedDeadline}: ${reason}]`;
+    const newNotes = currentNotes ? `${currentNotes}\n${extensionTag}` : extensionTag;
+
+    await getDb().update(tasks).set({
+      notes: newNotes,
+    }).where(eq(tasks.id, payload.id));
+
+    const [task] = await getDb().select().from(tasks).where(eq(tasks.id, payload.id)).limit(1);
+    await logSecurityEvent(request, {
+      actorEmail: user.email,
+      actorRole: user.role,
+      action: "REQUEST_TASK_EXTENSION",
+      resourceType: "task",
+      resourceId: payload.id,
+      reason: `${requestedDeadline} - ${reason}`,
+      before,
+      after: task,
+    });
+    return Response.json({ task });
+  }
+  if(payload.action==="approve_extension"){
+    const allEmployees = await getDb().select().from(employees);
+    const scope = await resolveTaskAccessScope(user, allEmployees);
+    const isSupervisor = canUserApproveTask(before, user.email, scope);
+    const canAdmin = ["super_user", "super_admin"].includes(user.role);
+    if (!isSupervisor && !canAdmin) {
+      return Response.json({ error: "Hanya atasan langsung atau admin yang dapat menyetujui perpanjangan deadline" }, { status: 403 });
+    }
+    const extendedDeadline = payload.extendedDeadline?.trim() || payload.requestedDeadline?.trim();
+    if (!extendedDeadline) {
+      return Response.json({ error: "Tanggal perpanjangan deadline wajib ditentukan" }, { status: 400 });
+    }
+    const decisionNote = payload.decisionNote?.trim() || "";
+    const currentNotes = before.notes || "";
+    const approvalTag = `[Perpanjangan Deadline Disetujui s.d ${extendedDeadline}${decisionNote ? `: ${decisionNote}` : ""}]`;
+    const newNotes = currentNotes ? `${currentNotes}\n${approvalTag}` : approvalTag;
+
+    await getDb().update(tasks).set({
+      extendedDeadline,
+      due: extendedDeadline,
+      notes: newNotes,
+    }).where(eq(tasks.id, payload.id));
+
+    const [task] = await getDb().select().from(tasks).where(eq(tasks.id, payload.id)).limit(1);
+    await logSecurityEvent(request, {
+      actorEmail: user.email,
+      actorRole: user.role,
+      action: "APPROVE_TASK_EXTENSION",
+      resourceType: "task",
+      resourceId: payload.id,
+      reason: `${extendedDeadline} - ${decisionNote}`,
+      before,
+      after: task,
+    });
+    return Response.json({ task });
   }
   if(payload.progress === undefined)return Response.json({error:"Progress wajib diisi"},{status:400});
   if(!before||!picsOf(before).map(x=>x.toLowerCase()).includes(user.email.toLowerCase()))return Response.json({error:"Hanya PIC pekerjaan yang dapat memperbarui progres"},{status:403});

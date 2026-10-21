@@ -34,7 +34,7 @@ export async function allowedTaskAssignees(user: User) {
   if (user.role === "super_user" || user.role === "super_admin" || hasSakipOperator(user)) {
     if (user.email) {
       const emailLower = user.email.toLowerCase();
-      return operationalStaff.filter(e => e.email.toLowerCase() !== emailLower);
+      return operationalStaff.filter(e => Boolean(e.email && e.email.toLowerCase() !== emailLower));
     }
     return operationalStaff;
   }
@@ -89,6 +89,9 @@ export async function allowedTaskAssignees(user: User) {
     }
   }
 
-  // Double safety: jika user pembuat adalah Kasubag atau Sekretaris, keluarkan diri sendiri dari opsi PIC
-  return operationalStaff.filter(employee => allowedIds.has(employee.id) && employee.id !== user.employee.id);
+  // Jika user pembuat adalah Kasubag atau Pimpinan, keluarkan diri sendiri dari opsi PIC
+  if (isUserSupervisor) {
+    return operationalStaff.filter(employee => allowedIds.has(employee.id) && employee.id !== user.employee.id);
+  }
+  return operationalStaff.filter(employee => allowedIds.has(employee.id));
 }
