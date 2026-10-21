@@ -8,9 +8,13 @@ import {
   performanceIndicators,
   tasks,
 } from "../../../db/schema";
-import { requireAuthorizedUser } from "../../lib/access";
+import { hasSakipOperator, requireAuthorizedUser } from "../../lib/access";
 import { generateRecurringTasks } from "../../lib/recurring-tasks";
-import { isTaskVisible, resolveTaskAccessScope } from "../../lib/task-visibility";
+import {
+  getSubordinateEmployeeIds,
+  isTaskVisible,
+  resolveTaskAccessScope,
+} from "../../lib/task-visibility";
 
 export async function GET(request: Request) {
   const identity = await requireAuthorizedUser(request);
@@ -35,15 +39,30 @@ export async function GET(request: Request) {
       task.priority === "Urgent" ||
       Boolean(task.deadline && task.deadline < today),
   );
-  const allPk = await db.select().from(performanceAgreements),
-    visiblePk = ["super_user", "super_admin", "admin"].includes(identity.role)
-      ? allPk
-      : allPk.filter(
-          (p) =>
-            p.employeeId === employee?.id || p.supervisorId === employee?.id,
-        ),
-    pkIds = visiblePk.map((p) => p.id),
-    pkIndicators = pkIds.length
+  const canManageAllPk =
+    ["super_user", "super_admin", "admin"].includes(identity.role) ||
+    hasSakipOperator(identity) ||
+    employee?.position === "Ketua" ||
+    employee?.position === "Sekretaris";
+  const subordinateIds = employee
+    ? getSubordinateEmployeeIds(
+        employee.id,
+        allEmployees,
+        employee.position,
+        employee.unitSubsection,
+      )
+    : new Set<number>();
+  const allPk = await db.select().from(performanceAgreements);
+  const visiblePk = canManageAllPk
+    ? allPk
+    : allPk.filter(
+        (p) =>
+          p.employeeId === employee?.id ||
+          p.supervisorId === employee?.id ||
+          subordinateIds.has(p.employeeId),
+      );
+  const pkIds = visiblePk.map((p) => p.id);
+  const pkIndicators = pkIds.length
       ? await db
           .select()
           .from(performanceIndicators)

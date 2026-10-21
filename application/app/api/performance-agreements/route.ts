@@ -12,6 +12,7 @@ import {
   performanceIndicators,
 } from "../../../db/schema";
 import { hasSakipOperator, requireAuthorizedUser } from "../../lib/access";
+import { getSubordinateEmployeeIds } from "../../lib/task-visibility";
 const managers = ["super_user", "super_admin", "admin", "operator"];
 
 let integrityChecked = false;
@@ -67,8 +68,56 @@ export async function GET(request: Request) {
         .select()
         .from(performanceAgreements)
         .orderBy(asc(performanceAgreements.year));
-    const manageAll=managers.includes(me.role)||hasSakipOperator(me);
+    const manageAll = managers.includes(me.role) || hasSakipOperator(me);
+    const isTopLeader = self?.position === "Ketua" || self?.position === "Sekretaris";
+
     let visible = all;
+    if (!manageAll && !isTopLeader) {
+      if (!self) {
+        visible = [];
+      } else if (self.position === "Anggota") {
+        const links = await db
+          .select()
+          .from(organizationCoordinations)
+          .where(eq(organizationCoordinations.commissionerEmployeeId, self.id));
+        const coordinatedUnits = links.map((x) => x.unitSubsection);
+
+        visible = all.filter((a) => {
+          if (a.employeeId === self.id) return true;
+          if (a.coordinationCommissionerId === self.id) return true;
+          if (a.agreementLevel === "Ketua") return true;
+          const owner = staff.find((e) => e.id === a.employeeId);
+          if (owner && coordinatedUnits.includes(owner.unitSubsection)) return true;
+          return false;
+        });
+      } else {
+        // Kasubag or Staff:
+        const subordinateIds = getSubordinateEmployeeIds(
+          self.id,
+          staff,
+          self.position,
+          self.unitSubsection,
+        );
+
+        const myAgreements = all.filter((a) => a.employeeId === self.id);
+        const parentAgreementIds = new Set(
+          myAgreements
+            .map((a) => a.parentAgreementId)
+            .filter((id): id is number => Boolean(id)),
+        );
+
+        visible = all.filter((a) => {
+          // 1. Dokumen PK milik sendiri
+          if (a.employeeId === self.id) return true;
+          // 2. Dokumen PK bawahan (untuk Kasubag / atasan)
+          if (subordinateIds.has(a.employeeId)) return true;
+          // 3. Dokumen PK atasan langsung atau parent agreement (sebagai rujukan cascading)
+          if (self.directSupervisorId && a.employeeId === self.directSupervisorId) return true;
+          if (parentAgreementIds.has(a.id)) return true;
+          return false;
+        });
+      }
+    }
     const ids = visible.map((a) => a.id),
       indicators = ids.length
         ? await db
