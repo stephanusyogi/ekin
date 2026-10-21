@@ -74,7 +74,7 @@ function formatActivityOutput(r: any) {
   if (parsedLinks.length === 0 && notes) {
     const urlMatches = notes.match(/https?:\/\/[^\s]+/g);
     if (urlMatches && urlMatches.length > 0) {
-      parsedLinks = urlMatches.map((u) => u.trim());
+      parsedLinks = urlMatches.map((u: string) => u.trim());
       const cleanedNotes = notes.replace(/https?:\/\/[^\s]+/g, "").trim();
       notes = cleanedNotes;
     }
