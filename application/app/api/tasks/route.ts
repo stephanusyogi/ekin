@@ -76,21 +76,62 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const user=await requireAuthorizedUser(request);
   if(user.role==="viewer"&&!hasSakipOperator(user))return Response.json({error:"Viewer tidak dapat memperbarui To-Do"},{status:403});
-  const payload = await request.json() as { id?: number; action?:"edit_unstarted"|"request_approval"|"approve"|"reject"|"needs_revision"|"verify_complete"|"verify_revision"; title?:string; unit?:string; picEmails?:string[]; priority?:string; outputType?:string; sourcePerformanceAgreementId?:number|null; sourcePerformanceIndicatorId?:number|null; deadline?:string; output?:string; progress?: number; outputRealization?:string; completedActivities?:string; obstacles?:string; notes?:string; decisionNote?:string };
+  const payload = await request.json() as { id?: number; action?:"edit_unstarted"|"supervisor_edit"|"request_approval"|"approve"|"reject"|"needs_revision"|"verify_complete"|"verify_revision"; title?:string; unit?:string; picEmails?:string[]; priority?:string; outputType?:string; sourcePerformanceAgreementId?:number|null; sourcePerformanceIndicatorId?:number|null; deadline?:string; output?:string; progress?: number; outputRealization?:string; completedActivities?:string; obstacles?:string; notes?:string; decisionNote?:string };
   if (!payload.id) return Response.json({ error: "Data tidak lengkap" }, { status: 400 });
   const [before]=await getDb().select().from(tasks).where(eq(tasks.id,payload.id)).limit(1);
   if(!before)return Response.json({error:"To-Do tidak ditemukan"},{status:404});
-  if(payload.action==="edit_unstarted"){
-    if(user.role!=="editor"||before.createdBy.toLowerCase()!==user.email.toLowerCase())return Response.json({error:"Hanya Kasubag pembuat To-Do yang dapat mengedit"},{status:403});
-    if(before.progress!==0||before.status!=="Baru")return Response.json({error:"To-Do hanya dapat diedit sebelum mulai dikerjakan"},{status:409});
-    const title=payload.title?.trim()||"",unit=payload.unit?.trim()||"";if(!title||!unit)return Response.json({error:"Uraian dan Unit/Subbagian wajib diisi"},{status:400});
-    const [registeredUnit]=await getDb().select({id:organizationUnits.id}).from(organizationUnits).where(eq(organizationUnits.name,unit)).limit(1);if(!registeredUnit)return Response.json({error:"Unit/Subbagian tidak terdaftar"},{status:400});
-    const allowed=new Set((await allowedTaskAssignees(user)).map(employee=>employee.email!.toLowerCase())),pics=(payload.picEmails||[]).map(email=>email.toLowerCase()).filter(email=>allowed.has(email));if(!pics.length)return Response.json({error:"Pilih minimal satu PIC dalam garis instruksi"},{status:400});
-    const requestedIndicatorId=Number(payload.sourcePerformanceIndicatorId||0),requestedAgreementId=Number(payload.sourcePerformanceAgreementId||0);if(Boolean(requestedIndicatorId)!==Boolean(requestedAgreementId))return Response.json({error:"Sumber PK tidak lengkap"},{status:400});if(requestedIndicatorId){const permitted=(await allowedTaskPerformanceSources(user)).some(source=>source.indicatorId===requestedIndicatorId&&source.agreementId===requestedAgreementId);if(!permitted)return Response.json({error:"PK berada di luar jalur koordinasi Anda"},{status:403})}
-    const outputType = (payload.outputType?.trim() || "Dokumen").slice(0, 50);
-    await getDb().update(tasks).set({title,unit,picEmails:JSON.stringify(pics),ownerEmail:pics[0],priority:payload.priority||"Sedang",outputType,sourcePerformanceAgreementId:requestedAgreementId||null,sourcePerformanceIndicatorId:requestedIndicatorId||null,deadline:payload.deadline||"",due:payload.deadline||"Belum ditentukan",output:payload.output?.trim()||"",notes:payload.notes?.trim()||""}).where(eq(tasks.id,payload.id));
+  if(payload.action==="edit_unstarted" || payload.action==="supervisor_edit"){
+    const allEmployees=await getDb().select().from(employees);
+    const scope=await resolveTaskAccessScope(user,allEmployees);
+    const isSupervisor=canUserApproveTask(before,user.email,scope);
+    const isCreator=before.createdBy.toLowerCase()===user.email.toLowerCase();
+    const canAdmin=["super_user","super_admin"].includes(user.role);
+
+    if(!isSupervisor && !isCreator && !canAdmin){
+      return Response.json({error:"Hanya pembuat, atasan langsung, atau admin yang dapat mengedit To-Do ini"},{status:403});
+    }
+
+    const title=payload.title?.trim()||before.title;
+    const unit=payload.unit?.trim()||before.unit;
+    const updateData: any = { title, unit };
+
+    if (Array.isArray(payload.picEmails) && payload.picEmails.length > 0) {
+      const cleanPics = payload.picEmails.map((e: string) => e.toLowerCase().trim()).filter(Boolean);
+      if (cleanPics.length > 0) {
+        updateData.picEmails = JSON.stringify(cleanPics);
+        updateData.ownerEmail = cleanPics[0];
+      }
+    }
+    if (payload.deadline !== undefined) {
+      updateData.deadline = payload.deadline || "";
+      updateData.due = payload.deadline || "Belum ditentukan";
+    }
+    if ((payload as any).extendedDeadline !== undefined) {
+      updateData.extendedDeadline = (payload as any).extendedDeadline || "";
+    }
+    if (payload.priority) {
+      updateData.priority = payload.priority;
+    }
+    if (payload.outputType) {
+      updateData.outputType = payload.outputType;
+    }
+    if (payload.output !== undefined) {
+      updateData.output = payload.output?.trim() || "";
+    }
+    if (payload.notes !== undefined) {
+      updateData.notes = payload.notes?.trim() || "";
+    }
+    if (payload.sourcePerformanceAgreementId !== undefined) {
+      updateData.sourcePerformanceAgreementId = payload.sourcePerformanceAgreementId;
+    }
+    if (payload.sourcePerformanceIndicatorId !== undefined) {
+      updateData.sourcePerformanceIndicatorId = payload.sourcePerformanceIndicatorId;
+    }
+
+    await getDb().update(tasks).set(updateData).where(eq(tasks.id,payload.id));
     const [task]=await getDb().select().from(tasks).where(eq(tasks.id,payload.id)).limit(1);
-    await logSecurityEvent(request,{actorEmail:user.email,actorRole:user.role,action:"EDIT_UNSTARTED_TASK",resourceType:"task",resourceId:payload.id,before,after:task});return Response.json({task});
+    await logSecurityEvent(request,{actorEmail:user.email,actorRole:user.role,action:"SUPERVISOR_EDIT_TASK",resourceType:"task",resourceId:payload.id,before,after:task});
+    return Response.json({task});
   }
   if(payload.action==="request_approval"){
     if(before.createdBy.toLowerCase()!==user.email.toLowerCase()||before.approvalStatus!=="Draft")return Response.json({error:"To-Do tidak dapat diajukan"},{status:403});
@@ -106,7 +147,33 @@ export async function PATCH(request: Request) {
     if(!allowed)return Response.json({error:"Hanya atasan langsung/pimpinan yang dapat memutuskan"},{status:403});
     const note=payload.decisionNote?.trim()||"";if(payload.action!=="approve"&&!note)return Response.json({error:"Catatan keputusan wajib diisi"},{status:400});
     const approved=payload.action==="approve",approvalStatus=approved?"Disetujui":payload.action==="reject"?"Ditolak":"Perlu Perbaikan";
-    await getDb().update(tasks).set({approvalStatus,approvalDecidedBy:user.email,approvalDecidedAt:new Date().toISOString().slice(0, 19).replace('T', ' '),approvalNote:note,status:approved?"Dikerjakan":payload.action==="reject"?"Ditolak":"Perbaikan"}).where(eq(tasks.id,payload.id));
+
+    const updateData: any = {
+      approvalStatus,
+      approvalDecidedBy: user.email,
+      approvalDecidedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      approvalNote: note,
+      status: approved ? "Dikerjakan" : payload.action === "reject" ? "Ditolak" : "Perbaikan",
+    };
+
+    if (approved) {
+      if (Array.isArray(payload.picEmails) && payload.picEmails.length > 0) {
+        const cleanPics = payload.picEmails.map((e: string) => e.toLowerCase().trim()).filter(Boolean);
+        if (cleanPics.length > 0) {
+          updateData.picEmails = JSON.stringify(cleanPics);
+          updateData.ownerEmail = cleanPics[0];
+        }
+      }
+      if (payload.deadline) {
+        updateData.deadline = payload.deadline;
+        updateData.due = payload.deadline;
+      }
+      if (payload.priority) {
+        updateData.priority = payload.priority;
+      }
+    }
+
+    await getDb().update(tasks).set(updateData).where(eq(tasks.id,payload.id));
     const [task]=await getDb().select().from(tasks).where(eq(tasks.id,payload.id)).limit(1);
     await logSecurityEvent(request,{actorEmail:user.email,actorRole:user.role,action:`TASK_APPROVAL_${String(payload.action).toUpperCase()}`,resourceType:"task",resourceId:payload.id,reason:note,before,after:task});
     return Response.json({task});

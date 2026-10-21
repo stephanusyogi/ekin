@@ -44,6 +44,7 @@ export async function allowedTaskPerformanceSources(user: User) {
       agreementLevel: agreement.agreementLevel,
       ownerName: owner?.fullName || "Pemilik PK",
       ownerPosition: owner?.position || agreement.agreementLevel,
+      unit: owner?.unitSubsection || "",
       objective: indicator.objective,
       indicator: indicator.indicator,
       target: indicator.targetDisplay || indicator.target,
