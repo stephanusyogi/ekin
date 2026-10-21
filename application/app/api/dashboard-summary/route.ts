@@ -10,43 +10,19 @@ import {
 } from "../../../db/schema";
 import { requireAuthorizedUser } from "../../lib/access";
 import { generateRecurringTasks } from "../../lib/recurring-tasks";
+import { isTaskVisible, resolveTaskAccessScope } from "../../lib/task-visibility";
 
 export async function GET(request: Request) {
   const identity = await requireAuthorizedUser(request);
   await generateRecurringTasks();
   const db = getDb();
-  const [employee] = await db
-    .select()
-    .from(employees)
-    .where(eq(employees.email, identity.email))
-    .limit(1);
+  const allEmployees = await db.select().from(employees);
+  const [employee] = allEmployees.filter(e => e.email?.toLowerCase() === identity.email.toLowerCase());
   const all = await db.select().from(tasks).orderBy(asc(tasks.deadline));
   const todayKey=new Date().toISOString().slice(0,10),todayAgendas=(await db.select().from(activityAgendas).orderBy(asc(activityAgendas.startTime))).filter(a=>a.startDate<=todayKey&&a.endDate>=todayKey&&a.status!=="Batal");
-  const parsePics = (raw: any): string[] => {
-    if (Array.isArray(raw)) return raw;
-    try { return typeof raw === "string" ? JSON.parse(raw) : []; }
-    catch { return []; }
-  };
-  let visible = all.filter(
-    (task) =>
-      task.ownerEmail === identity.email ||
-      parsePics(task.picEmails).includes(identity.email),
-  );
-  if (
-    ["super_user", "super_admin", "admin"].includes(identity.role) ||
-    employee?.position === "Sekretaris" ||
-    employee?.position === "Ketua"
-  )
-    visible = all;
-  else if (employee?.position === "Anggota") {
-    const links = await db
-      .select()
-      .from(organizationCoordinations)
-      .where(eq(organizationCoordinations.commissionerEmployeeId, employee.id));
-    const units = links.map((link) => link.unitSubsection);
-    visible = all.filter((task) => units.includes(task.unit));
-  } else if (employee?.position.toLowerCase().includes("kasubag"))
-    visible = all.filter((task) => task.unit === employee.unitSubsection);
+
+  const accessScope = await resolveTaskAccessScope(identity, allEmployees);
+  const visible = all.filter(task => isTaskVisible(task, identity.email, accessScope));
   const active = visible.filter(
       (task) => task.status !== "Selesai" && task.progress < 100,
     ),

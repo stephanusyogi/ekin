@@ -6,13 +6,13 @@ import { generateRecurringTasks } from "../../lib/recurring-tasks";
 import { allowedTaskAssignees } from "../../lib/task-assignees";
 import { allowedTaskPerformanceSources } from "../../lib/task-performance-sources";
 import { logSecurityEvent } from "../../lib/security";
-
-const picsOf = (task: typeof tasks.$inferSelect) => {
-  const raw = task.picEmails as any;
-  if (Array.isArray(raw)) return raw as string[];
-  try { return typeof raw === "string" ? JSON.parse(raw) as string[] : []; }
-  catch { return []; }
-};
+import {
+  canUserApproveTask,
+  enrichTaskWithPicNames,
+  isTaskVisible,
+  parsePics as picsOf,
+  resolveTaskAccessScope,
+} from "../../lib/task-visibility";
 
 export async function GET(request: Request) {
   const user = await requireAuthorizedUser(request);
@@ -20,38 +20,31 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const taskId = Number(url.searchParams.get("taskId") || 0);
 
+  const allEmployees = await getDb().select().from(employees);
+  const scope = await resolveTaskAccessScope(user, allEmployees);
+
   if (taskId) {
     const [task] = await getDb().select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
     if (!task) return Response.json({ error: "To-Do tidak ditemukan" }, { status: 404 });
 
-    const isPic = picsOf(task).map(x => x.toLowerCase()).includes(user.email.toLowerCase());
-    const isCreator = task.createdBy.toLowerCase() === user.email.toLowerCase();
-    const isAdmin = ["super_user", "super_admin", "admin"].includes(user.role);
-
-    let isAuthorized = isPic || isCreator || isAdmin || hasSakipOperator(user);
-    if (!isAuthorized) {
-      const allEmployees = await getDb().select().from(employees);
-      const currentUserEmp = allEmployees.find(e => e.email?.toLowerCase() === user.email.toLowerCase());
-      if (currentUserEmp) {
-        const picEmails = picsOf(task).map(x => x.toLowerCase());
-        const subordinates = allEmployees.filter(e => e.directSupervisorId === currentUserEmp.id && e.email);
-        const subordinateEmails = subordinates.map(e => e.email!.toLowerCase());
-        if (subordinateEmails.includes(task.createdBy.toLowerCase()) || picEmails.some(p => subordinateEmails.includes(p))) {
-          isAuthorized = true;
-        }
-      }
-    }
-
-    if (!isAuthorized) {
+    if (!isTaskVisible(task, user.email, scope)) {
       return Response.json({ error: "To-Do tidak ditemukan atau berada di luar kewenangan Anda" }, { status: 403 });
     }
 
-    const history = await getDb().select().from(taskProgressUpdates).where(eq(taskProgressUpdates.taskId, taskId)).orderBy(desc(taskProgressUpdates.createdAt)).limit(50);
-    return Response.json({ task, history });
+    const history = await getDb()
+      .select()
+      .from(taskProgressUpdates)
+      .where(eq(taskProgressUpdates.taskId, taskId))
+      .orderBy(desc(taskProgressUpdates.createdAt))
+      .limit(50);
+    return Response.json({ task: enrichTaskWithPicNames(task, allEmployees), history });
   }
 
   const all = await getDb().select().from(tasks).orderBy(desc(tasks.createdAt));
-  const rows = all.filter(task => picsOf(task).map(x => x.toLowerCase()).includes(user.email.toLowerCase())).slice(0, 100);
+  const rows = all
+    .filter(task => isTaskVisible(task, user.email, scope))
+    .slice(0, 100)
+    .map(task => enrichTaskWithPicNames(task, allEmployees));
   return Response.json({ tasks: rows });
 }
 
@@ -107,9 +100,10 @@ export async function PATCH(request: Request) {
     return Response.json({task});
   }
   if(["approve","reject","needs_revision"].includes(payload.action||"")){
-    const allEmployees=await getDb().select().from(employees),creator=allEmployees.find(e=>e.email?.toLowerCase()===before.createdBy.toLowerCase()),approver=allEmployees.find(e=>e.email?.toLowerCase()===user.email.toLowerCase());
-    const allowed=["super_user","super_admin","admin"].includes(user.role)||Boolean(creator&&approver&&creator.directSupervisorId===approver.id)||Boolean(approver&&(approver.position==="Sekretaris"||approver.position==="Ketua"));
-    if(!allowed)return Response.json({error:"Hanya atasan langsung yang dapat memutuskan"},{status:403});
+    const allEmployees=await getDb().select().from(employees);
+    const scope=await resolveTaskAccessScope(user,allEmployees);
+    const allowed=canUserApproveTask(before,user.email,scope);
+    if(!allowed)return Response.json({error:"Hanya atasan langsung/pimpinan yang dapat memutuskan"},{status:403});
     const note=payload.decisionNote?.trim()||"";if(payload.action!=="approve"&&!note)return Response.json({error:"Catatan keputusan wajib diisi"},{status:400});
     const approved=payload.action==="approve",approvalStatus=approved?"Disetujui":payload.action==="reject"?"Ditolak":"Perlu Perbaikan";
     await getDb().update(tasks).set({approvalStatus,approvalDecidedBy:user.email,approvalDecidedAt:new Date().toISOString().slice(0, 19).replace('T', ' '),approvalNote:note,status:approved?"Dikerjakan":payload.action==="reject"?"Ditolak":"Perbaikan"}).where(eq(tasks.id,payload.id));
@@ -118,9 +112,10 @@ export async function PATCH(request: Request) {
     return Response.json({task});
   }
   if(["verify_complete","verify_revision"].includes(payload.action||"")){
-    const allEmployees=await getDb().select().from(employees),approver=allEmployees.find(e=>e.email?.toLowerCase()===user.email.toLowerCase()),picEmails=picsOf(before).map(x=>x.toLowerCase()),picRows=allEmployees.filter(e=>e.email&&picEmails.includes(e.email.toLowerCase()));
-    const allowed=["super_user","super_admin","admin"].includes(user.role)||Boolean(approver&&picRows.some(pic=>pic.directSupervisorId===approver.id))||Boolean(approver&&(approver.position==="Sekretaris"||approver.position==="Ketua"));
-    if(!allowed)return Response.json({error:"Hanya atasan langsung PIC yang dapat memverifikasi hasil akhir"},{status:403});
+    const allEmployees=await getDb().select().from(employees);
+    const scope=await resolveTaskAccessScope(user,allEmployees);
+    const allowed=canUserApproveTask(before,user.email,scope);
+    if(!allowed)return Response.json({error:"Hanya atasan langsung PIC/pimpinan yang dapat memverifikasi hasil akhir"},{status:403});
     if(before.status!=="Verifikasi Final"&&before.verificationStatus!=="Menunggu Verifikasi")return Response.json({error:"To-Do belum berada pada tahap verifikasi final"},{status:409});
     const completed=payload.action==="verify_complete",note=payload.decisionNote?.trim()||"";if(!completed&&!note)return Response.json({error:"Catatan perbaikan wajib diisi"},{status:400});
     await getDb().update(tasks).set({status:completed?"Selesai":"Perbaikan",verificationStatus:completed?"Terverifikasi":"Perlu Perbaikan",approvalNote:note||before.approvalNote}).where(eq(tasks.id,payload.id));
