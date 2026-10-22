@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   const requestedIndicatorId=Number(payload.sourcePerformanceIndicatorId||0),requestedAgreementId=Number(payload.sourcePerformanceAgreementId||0);
   if(Boolean(requestedIndicatorId)!==Boolean(requestedAgreementId))return Response.json({error:"Pilih sumber PK dan indikator yang lengkap"},{status:400});
   if(requestedIndicatorId){const permitted=(await allowedTaskPerformanceSources(user)).some(source=>source.indicatorId===requestedIndicatorId&&source.agreementId===requestedAgreementId);if(!permitted)return Response.json({error:"PK berada di luar jalur koordinasi Anda"},{status:403})}
-  const outputType = (payload.outputType?.trim() || "Dokumen").slice(0, 50);
+  const outputType = (payload.outputType?.trim() || "Dokumen").slice(0, 255);
   const isSupervisorOrAdmin = ["super_user", "super_admin", "admin", "editor"].includes(user.role);
   const needsApproval = !isSupervisorOrAdmin;
   const [res] = await getDb().insert(tasks).values({ ownerEmail:pics[0], createdBy:user.email, title, unit, picEmails:JSON.stringify(pics), priority:payload.priority||"Sedang", outputType, sourcePerformanceAgreementId:requestedAgreementId||null, sourcePerformanceIndicatorId:requestedIndicatorId||null, deadline:payload.deadline||"", due:payload.deadline||"Belum ditentukan", output:payload.output?.trim()||"", notes:payload.notes?.trim()||"", approvalNote: "", status:"Baru",approvalStatus:needsApproval?"Draft":"Tidak Perlu Persetujuan" });

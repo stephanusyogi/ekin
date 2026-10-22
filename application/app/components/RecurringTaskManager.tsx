@@ -29,26 +29,79 @@ const OUTPUT_CATEGORIES=[
  ["Lain-lain","Kategori output pekerjaan lainnya yang belum tercakup di atas"],
 ] as const;
 
-function parseOutputCategories(raw:string){
- if(!raw)return{selected:["Dokumen"],otherText:""};
- const parts=raw.split(/,\s*/),selected:string[]=[];let otherText="";
- for(const part of parts){
-  const trimmed=part.trim();if(!trimmed)continue;
-  if(trimmed.startsWith("Lain-lain")||trimmed.startsWith("Lainnya")){
-   if(!selected.includes("Lain-lain"))selected.push("Lain-lain");
-   const colonMatch=trimmed.match(/^Lain-(?:lain|nya):\s*(.*)$/),parenMatch=trimmed.match(/^Lain-(?:lain|nya)\s*\((.*)\)$/);
-   if(colonMatch)otherText=colonMatch[1].trim();else if(parenMatch)otherText=parenMatch[1].trim();
-  }else{
-   if(!selected.includes(trimmed))selected.push(trimmed);
+const KNOWN_OUTPUT_CATEGORIES = [
+  "Dokumen",
+  "Laporan",
+  "Data",
+  "File spreadsheet",
+  "Presentasi",
+  "Komunikasi",
+  "Arsip",
+  "Jadwal",
+  "Hasil kegiatan",
+  "Rekomendasi",
+];
+const KNOWN_OUTPUT_PATTERN = KNOWN_OUTPUT_CATEGORIES.map(k => k.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&")).join("|");
+
+function parseOutputCategories(raw?: string) {
+  if (!raw) return { selected: ["Dokumen"], otherText: "" };
+
+  let remaining = raw;
+  let otherText = "";
+  let hasOther = false;
+
+  const parenRegex = new RegExp("(?:^|,\\s*)Lain-(?:lain|nya)\\s*\\(([\\s\\S]*?)\\)(?=(?:,\\s*(?:" + KNOWN_OUTPUT_PATTERN + "))|$)", "i");
+  const parenMatch = remaining.match(parenRegex);
+
+  if (parenMatch) {
+    hasOther = true;
+    otherText = parenMatch[1];
+    const idx = parenMatch.index ?? 0;
+    remaining = remaining.slice(0, idx) + "," + remaining.slice(idx + parenMatch[0].length);
+  } else {
+    const colonRegex = new RegExp("(?:^|,\\s*)Lain-(?:lain|nya):\\s*([\\s\\S]*?)(?=(?:,\\s*(?:" + KNOWN_OUTPUT_PATTERN + "))|$)", "i");
+    const colonMatch = remaining.match(colonRegex);
+    if (colonMatch) {
+      hasOther = true;
+      otherText = colonMatch[1];
+      const idx = colonMatch.index ?? 0;
+      remaining = remaining.slice(0, idx) + "," + remaining.slice(idx + colonMatch[0].length);
+    } else {
+      const bareRegex = new RegExp("(?:^|,\\s*)Lain-(?:lain|nya)(?=(?:,\\s*(?:" + KNOWN_OUTPUT_PATTERN + "))|$)", "i");
+      const bareMatch = remaining.match(bareRegex);
+      if (bareMatch) {
+        hasOther = true;
+        const idx = bareMatch.index ?? 0;
+        remaining = remaining.slice(0, idx) + "," + remaining.slice(idx + bareMatch[0].length);
+      }
+    }
   }
- }
- return{selected:selected.length?selected:["Dokumen"],otherText};
+
+  const parts = remaining.split(/,\s*/);
+  const selected: string[] = [];
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed && !selected.includes(trimmed)) {
+      selected.push(trimmed);
+    }
+  }
+
+  if (hasOther && !selected.includes("Lain-lain")) {
+    selected.push("Lain-lain");
+  }
+
+  return { selected: selected.length ? selected : ["Dokumen"], otherText };
 }
 
-function serializeOutputCategories(selected:string[],otherText:string):string{
- if(!selected.length)return"Dokumen";
- const list=selected.map(cat=>{if(cat==="Lain-lain"){const clean=otherText.trim();return clean?`Lain-lain (${clean})`:"Lain-lain"}return cat});
- return list.join(", ");
+function serializeOutputCategories(selected: string[], otherText: string): string {
+  if (!selected.length) return "Dokumen";
+  const list = selected.map(cat => {
+    if (cat === "Lain-lain") {
+      return otherText ? `Lain-lain (${otherText})` : "Lain-lain";
+    }
+    return cat;
+  });
+  return list.join(", ");
 }
 type ScopeFilter = "aktif" | "semua" | "selesai" | "overdue";
 
@@ -925,7 +978,17 @@ function ReviewModal({task,assignees=[],units=[],close,onApproveWithAdjustments,
  );
 }
 function OutputCategoryPicker({value,change}:any){
- const {selected,otherText}=parseOutputCategories(value);
+ const {selected,otherText:parsedOtherText}=parseOutputCategories(value);
+ const [otherText,setOtherText]=useState(parsedOtherText);
+ const lastSerializedRef=useRef<string>(value);
+
+ useEffect(()=>{
+  if(value!==lastSerializedRef.current){
+   lastSerializedRef.current=value;
+   setOtherText(parseOutputCategories(value).otherText);
+  }
+ },[value]);
+
  const toggleCategory=(cat:string)=>{
   let next:string[];
   if(selected.includes(cat)){
@@ -934,10 +997,26 @@ function OutputCategoryPicker({value,change}:any){
   }else{
    next=[...selected,cat];
   }
-  change(serializeOutputCategories(next,otherText));
+  const serialized=serializeOutputCategories(next,otherText);
+  lastSerializedRef.current=serialized;
+  change(serialized);
  };
+
  const updateOtherText=(text:string)=>{
-  change(serializeOutputCategories(selected,text));
+  setOtherText(text);
+  const serialized=serializeOutputCategories(selected,text);
+  lastSerializedRef.current=serialized;
+  change(serialized);
+ };
+
+ const handleBlur=()=>{
+  const trimmed=otherText.trim();
+  if(trimmed!==otherText){
+   setOtherText(trimmed);
+   const serialized=serializeOutputCategories(selected,trimmed);
+   lastSerializedRef.current=serialized;
+   change(serialized);
+  }
  };
 
  return (
@@ -962,7 +1041,13 @@ function OutputCategoryPicker({value,change}:any){
     <div className="output-other-input-wrap">
      <label>
       Keterangan Kategori Pekerjaan Lainnya
-      <input type="text" placeholder="Contoh: Aplikasi web, publikasi media, spanduk, dll." value={otherText} onChange={e=>updateOtherText(e.target.value)}/>
+      <input
+       type="text"
+       placeholder="Contoh: Aplikasi web, publikasi media, spanduk, dll."
+       value={otherText}
+       onChange={e=>updateOtherText(e.target.value)}
+       onBlur={handleBlur}
+      />
      </label>
     </div>
    )}
