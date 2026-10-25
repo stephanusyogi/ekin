@@ -6,7 +6,7 @@ type ProgressUpdate={id:number;employeeEmail:string;progress:number;outputRealiz
 type Assignee={id:number;fullName:string;email:string;position:string;unit:string;isSelf:boolean};type OrgUnit={id:number;name:string;type:string};
 type PerformanceSource={agreementId:number;indicatorId:number;year:number;agreementTitle:string;agreementLevel:string;ownerName:string;ownerPosition:string;unit?:string;objective:string;indicator:string;target:string};
 const fresh=()=>({mode:"Sekali" as "Sekali"|"Berulang",title:"",unit:"",picEmails:[] as string[],priority:"Sedang",outputType:"Dokumen",sourcePerformanceAgreementId:null as number|null,sourcePerformanceIndicatorId:null as number|null,deadline:"",output:"",notes:"",frequency:"Bulanan",generationDay:1,dueOffsetDays:7,startDate:new Date().toISOString().slice(0,10),endDate:"",verifierEmail:""});
-const parsePics=(raw:any)=>{if(Array.isArray(raw))return raw as string[];try{return typeof raw==="string"?JSON.parse(raw) as string[]:[]}catch{return[]}};
+const parsePics=(raw:any):string[]=>{if(!raw)return[];if(Array.isArray(raw))return raw.filter(Boolean);if(typeof raw==="object"){const list=raw.picEmails?parsePics(raw.picEmails):[];if(list.length>0)return list;if(raw.ownerEmail&&typeof raw.ownerEmail==="string")return[raw.ownerEmail];return[]}try{if(typeof raw==="string"){const parsed=JSON.parse(raw);if(Array.isArray(parsed))return parsed.filter(Boolean);if(typeof parsed==="string"&&parsed.trim())return[parsed.trim()];return[]}}catch{return typeof raw==="string"&&raw.trim()?[raw.trim()]:[]}return[]};
 const getPicNames=(t:Task,assigneesList:Assignee[]=[]):string[]=>{
  if(Array.isArray(t.picNames)&&t.picNames.length>0)return t.picNames;
  const emails=parsePics(t.picEmails);
@@ -294,7 +294,7 @@ export default function RecurringTaskManager(){
     load();
   };
 
-  const canUpdate=(task:Task)=>Boolean(currentEmail&&parsePics(task.picEmails).map(x=>x.toLowerCase()).includes(currentEmail.toLowerCase()));
+  const canUpdate=(task:Task)=>Boolean(currentEmail&&(parsePics(task).map(x=>x.toLowerCase()).includes(currentEmail.toLowerCase())||(task as any).ownerEmail?.toLowerCase()===currentEmail.toLowerCase()));
   const canEditUnstarted=(task:Task)=>task.createdBy.toLowerCase()===currentEmail.toLowerCase()&&task.status==="Baru"&&task.progress===0;
   const sourceFor=(task:Task)=>performanceSources.find(source=>source.indicatorId===task.sourcePerformanceIndicatorId);
 

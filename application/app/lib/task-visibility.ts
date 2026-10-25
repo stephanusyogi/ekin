@@ -9,11 +9,24 @@ export type EmployeeRow = typeof employees.$inferSelect;
 export type UserIdentity = Awaited<ReturnType<typeof requireAuthorizedUser>>;
 
 export const parsePics = (raw: any): string[] => {
-  if (Array.isArray(raw)) return raw;
-  try {
-    return typeof raw === "string" ? JSON.parse(raw) : [];
-  } catch {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (typeof raw === "object") {
+    const fromPics = raw.picEmails ? parsePics(raw.picEmails) : [];
+    if (fromPics.length > 0) return fromPics;
+    if (raw.ownerEmail && typeof raw.ownerEmail === "string") return [raw.ownerEmail];
     return [];
+  }
+  try {
+    if (typeof raw === "string") {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      if (typeof parsed === "string" && parsed.trim()) return [parsed.trim()];
+      return [];
+    }
+    return [];
+  } catch {
+    return typeof raw === "string" && raw.trim() ? [raw.trim()] : [];
   }
 };
 

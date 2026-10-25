@@ -192,7 +192,7 @@ export async function PATCH(request: Request) {
   }
   if(payload.action==="request_extension"){
     const pics = picsOf(before).map((e: string) => e.toLowerCase());
-    const isPic = pics.includes(user.email.toLowerCase());
+    const isPic = pics.includes(user.email.toLowerCase()) || (before.ownerEmail && before.ownerEmail.toLowerCase() === user.email.toLowerCase());
     const isCreator = before.createdBy.toLowerCase() === user.email.toLowerCase();
     const canAdmin = ["super_user", "super_admin"].includes(user.role);
     if (!isPic && !isCreator && !canAdmin) {
@@ -264,7 +264,10 @@ export async function PATCH(request: Request) {
     return Response.json({ task });
   }
   if(payload.progress === undefined)return Response.json({error:"Progress wajib diisi"},{status:400});
-  if(!before||!picsOf(before).map(x=>x.toLowerCase()).includes(user.email.toLowerCase()))return Response.json({error:"Hanya PIC pekerjaan yang dapat memperbarui progres"},{status:403});
+  const pics = picsOf(before).map(x => x.toLowerCase());
+  const isPic = pics.includes(user.email.toLowerCase()) || (before.ownerEmail && before.ownerEmail.toLowerCase() === user.email.toLowerCase());
+  const canAdmin = ["super_user", "super_admin"].includes(user.role);
+  if(!before || (!isPic && !canAdmin))return Response.json({error:"Hanya PIC pekerjaan yang dapat memperbarui progres"},{status:403});
   if(["Draft","Menunggu Persetujuan","Ditolak","Perlu Perbaikan"].includes(before.approvalStatus))return Response.json({error:"To-Do harus disetujui sebelum progress diperbarui"},{status:409});
   const rawProgress = Number(payload.progress);
   if (isNaN(rawProgress)) return Response.json({ error: "Nilai progress tidak valid" }, { status: 400 });
